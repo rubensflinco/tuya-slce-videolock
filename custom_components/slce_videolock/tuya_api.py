@@ -69,6 +69,15 @@ def parse_status_list(result: list[dict[str, Any]] | None) -> dict[str, Any]:
     return out
 
 
+def device_category(dev: dict[str, Any]) -> str:
+    """Best-effort category from Cloud list / detail payloads."""
+    for key in ("category", "category_code", "product_category", "device_category"):
+        raw = dev.get(key)
+        if raw:
+            return str(raw).strip().lower()
+    return ""
+
+
 def filter_lock_devices(
     devices: list[dict[str, Any]],
     categories: frozenset[str] = SUPPORTED_LOCK_CATEGORIES,
@@ -78,7 +87,7 @@ def filter_lock_devices(
     for dev in devices:
         if not isinstance(dev, dict):
             continue
-        category = str(dev.get("category") or "").strip().lower()
+        category = device_category(dev)
         device_id = str(dev.get("id") or "").strip()
         if not device_id or category not in categories:
             continue
@@ -95,7 +104,7 @@ def filter_lock_devices(
 def format_device_option(dev: dict[str, Any]) -> str:
     """Human label for config-flow dropdown: Name (category) — id."""
     name = str(dev.get("name") or "Device").strip() or "Device"
-    category = str(dev.get("category") or "?").strip() or "?"
+    category = device_category(dev) or "?"
     device_id = str(dev.get("id") or "").strip()
     online = dev.get("online")
     suffix = ""
@@ -251,51 +260,87 @@ class TuyaCloudApi:
         result = resp.get("result")
         return result if isinstance(result, dict) else {}
 
-    async def async_list_devices(self) -> list[dict[str, Any]]:
-        """List devices linked to the Cloud project / app account.
+    @staticmethod
+    def _extract_device_list(resp: dict[str, Any]) -> list[dict[str, Any]]:
+        """Normalize various Tuya list payloads into a list of device dicts."""
+        if not resp.get("success"):
+            return []
+        result = resp.get("result")
+        if isinstance(result, list):
+            return [d for d in result if isinstance(d, dict)]
+        if isinstance(result, dict):
+            for key in ("devices", "list"):
+                raw = result.get(key)
+                if isinstance(raw, list):
+                    return [d for d in raw if isinstance(d, dict)]
+        return []
 
-        Tries Smart Home user devices first, then IoT Core paginated list.
+    async def async_list_devices(self) -> list[dict[str, Any]]:
+        """List devices linked to the Cloud project / Smart Life app.
+
+        Order matches working community lock integrations:
+        1) ``/v1.0/iot-01/associated-users/devices`` (app-linked devices)
+        2) ``/v1.0/users/{uid}/devices``
+        3) ``/v1.0/iot-03/devices`` (IoT Core page)
         """
         await self._ensure_token()
-        devices: list[dict[str, Any]] = []
-
+        attempts: list[str] = [
+            "/v1.0/iot-01/associated-users/devices",
+            "/v1.0/iot-01/associated-users/devices?size=100",
+        ]
         if self._uid:
-            path = f"/v1.0/users/{self._uid}/devices"
-            resp = await self._request("GET", path)
-            if resp.get("success"):
-                result = resp.get("result")
-                if isinstance(result, list):
-                    devices = [d for d in result if isinstance(d, dict)]
-                elif isinstance(result, dict):
-                    for key in ("devices", "list"):
-                        raw = result.get(key)
-                        if isinstance(raw, list):
-                            devices = [d for d in raw if isinstance(d, dict)]
-                            break
-            else:
-                _LOGGER.debug(
-                    "users/%s/devices failed: %s",
-                    self._uid,
-                    resp.get("msg"),
-                )
+            attempts.append(f"/v1.0/users/{self._uid}/devices")
+        attempts.append("/v1.0/iot-03/devices?page_size=100&page_no=1")
 
-        if not devices:
-            # Fallback: IoT Core device list (page 1)
-            path = "/v1.0/iot-03/devices?page_size=100&page_no=1"
+        last_err: str | None = None
+        for path in attempts:
             resp = await self._request("GET", path)
-            if resp.get("success"):
-                result = resp.get("result") or {}
-                raw = result.get("list") if isinstance(result, dict) else None
-                if isinstance(raw, list):
-                    devices = [d for d in raw if isinstance(d, dict)]
-            else:
-                _LOGGER.debug("iot-03 devices failed: %s", resp.get("msg"))
+            if not resp.get("success"):
+                last_err = f"{path}: {resp.get('msg')} ({resp.get('code')})"
+                _LOGGER.warning("Device list attempt failed — %s", last_err)
+                continue
+            devices = self._extract_device_list(resp)
+            cats = sorted(
+                {
+                    str(d.get("category") or "")
+                    for d in devices
+                    if isinstance(d, dict)
+                }
+            )
+            _LOGGER.info(
+                "Device list via %s → %s device(s), categories=%s",
+                path.split("?")[0],
+                len(devices),
+                cats,
+            )
+            if devices:
+                return devices
 
-        return devices
+        if last_err:
+            _LOGGER.error("All device list endpoints failed/empty. Last: %s", last_err)
+        return []
 
     async def async_list_lock_devices(self) -> list[dict[str, Any]]:
-        """List only supported lock / videolock categories."""
-        return filter_lock_devices(await self.async_list_devices())
+        """List lock/videolock devices; if category filter is empty, return all.
+
+        Returning the unfiltered list lets the user still pick the SL-CE when
+        Cloud reports an unexpected category code.
+        """
+        all_devices = await self.async_list_devices()
+        locks = filter_lock_devices(all_devices)
+        if all_devices and not locks:
+            cats = sorted(
+                {device_category(d) or "?" for d in all_devices if isinstance(d, dict)}
+            )
+            _LOGGER.warning(
+                "Found %s Cloud device(s) but none match lock categories %s; "
+                "saw: %s — offering full list in config flow",
+                len(all_devices),
+                sorted(SUPPORTED_LOCK_CATEGORIES),
+                cats,
+            )
+            return all_devices
+        return locks
 
     async def async_get_device(self, device_id: str) -> dict[str, Any] | None:
         """Fetch device metadata; return None on soft failure (coordinator)."""

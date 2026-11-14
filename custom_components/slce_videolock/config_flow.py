@@ -1,4 +1,4 @@
-"""Config flow: credentials → pick lock from Cloud device list."""
+"""Config flow: credentials → pick lock (or enter Device ID manually)."""
 
 from __future__ import annotations
 
@@ -80,8 +80,18 @@ def _device_schema(options: list[dict[str, str]]) -> vol.Schema:
     )
 
 
+def _manual_schema() -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(CONF_DEVICE_ID): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+            ),
+        }
+    )
+
+
 class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Two-step setup: Cloud credentials, then select a lock device."""
+    """Credentials, then select lock — or type Device ID if discovery is empty."""
 
     VERSION = 1
 
@@ -113,12 +123,12 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._devices = await api.async_list_lock_devices()
                     except (TuyaApiError, ConnectionError, OSError) as err:
                         _LOGGER.warning("Device list failed: %s", err)
-                        errors["base"] = "cannot_connect"
-                    else:
-                        if not self._devices:
-                            errors["base"] = "no_compatible_devices"
-                        else:
-                            return await self.async_step_select_device()
+                        # Still allow manual Device ID entry
+                        self._devices = []
+                        return await self.async_step_manual_device()
+                    if self._devices:
+                        return await self.async_step_select_device()
+                    return await self.async_step_manual_device()
             finally:
                 await api.async_close()
 
@@ -135,7 +145,7 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_select_device(self, user_input: dict | None = None):
-        """Step 2: pick a videolock / smart lock from the Cloud account."""
+        """Step 2a: pick a videolock / smart lock from Cloud discovery."""
         errors: dict[str, str] = {}
         options = [
             {"value": str(d["id"]), "label": format_device_option(d)}
@@ -152,43 +162,8 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if match is None:
                 errors["base"] = "device_not_found"
             else:
-                await self.async_set_unique_id(device_id)
-                self._abort_if_unique_id_configured()
-
-                name = (
-                    str(match.get("name") or "").strip()
-                    or DEFAULT_DEVICE_NAME
-                )
-                # Soft-check remote unlock
-                api = TuyaCloudApi(
-                    access_id=self._access_id,
-                    access_secret=self._access_secret,
-                    region=self._region,
-                )
-                try:
-                    try:
-                        remote_ok = await api.async_check_remote_unlock(device_id)
-                        if not remote_ok:
-                            _LOGGER.warning(
-                                "Remote unlock without password appears disabled "
-                                "for %s — enable it in Smart Life",
-                                device_id,
-                            )
-                    except Exception as err:  # noqa: BLE001
-                        _LOGGER.debug("Remote unlock check skipped: %s", err)
-                finally:
-                    await api.async_close()
-
-                return self.async_create_entry(
-                    title=name,
-                    data={
-                        CONF_ACCESS_ID: self._access_id,
-                        CONF_ACCESS_SECRET: self._access_secret,
-                        CONF_REGION: self._region,
-                        CONF_DEVICE_ID: device_id,
-                        CONF_DEVICE_NAME: name,
-                    },
-                )
+                name = str(match.get("name") or "").strip() or DEFAULT_DEVICE_NAME
+                return await self._async_finish(device_id, name)
 
         return self.async_show_form(
             step_id="select_device",
@@ -196,5 +171,79 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "device_count": str(len(options)),
+            },
+        )
+
+    async def async_step_manual_device(self, user_input: dict | None = None):
+        """Step 2b: type Device ID when Cloud list is empty / filtered out."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            device_id = str(user_input[CONF_DEVICE_ID]).strip()
+            if not device_id:
+                errors[CONF_DEVICE_ID] = "device_not_found"
+            else:
+                api = TuyaCloudApi(
+                    access_id=self._access_id,
+                    access_secret=self._access_secret,
+                    region=self._region,
+                )
+                name = DEFAULT_DEVICE_NAME
+                try:
+                    try:
+                        info = await api.async_get_device_info(device_id)
+                        name = str(info.get("name") or "").strip() or name
+                    except TuyaApiError as err:
+                        _LOGGER.warning("Manual device lookup failed: %s", err)
+                        code = str(err.code) if err.code is not None else ""
+                        if code in {"1106", "2008", "2009"}:
+                            errors["base"] = "device_not_found"
+                        else:
+                            errors["base"] = "cannot_connect"
+                finally:
+                    await api.async_close()
+                if not errors:
+                    return await self._async_finish(device_id, name)
+
+        return self.async_show_form(
+            step_id="manual_device",
+            data_schema=_manual_schema(),
+            errors=errors,
+            description_placeholders={
+                "tuya_project_url": TUYA_PROJECT_URL,
+            },
+        )
+
+    async def _async_finish(self, device_id: str, name: str):
+        """Create config entry after unique-id checks + soft remote-unlock warn."""
+        await self.async_set_unique_id(device_id)
+        self._abort_if_unique_id_configured()
+
+        api = TuyaCloudApi(
+            access_id=self._access_id,
+            access_secret=self._access_secret,
+            region=self._region,
+        )
+        try:
+            try:
+                remote_ok = await api.async_check_remote_unlock(device_id)
+                if not remote_ok:
+                    _LOGGER.warning(
+                        "Remote unlock without password appears disabled for %s",
+                        device_id,
+                    )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Remote unlock check skipped: %s", err)
+        finally:
+            await api.async_close()
+
+        return self.async_create_entry(
+            title=name,
+            data={
+                CONF_ACCESS_ID: self._access_id,
+                CONF_ACCESS_SECRET: self._access_secret,
+                CONF_REGION: self._region,
+                CONF_DEVICE_ID: device_id,
+                CONF_DEVICE_NAME: name,
             },
         )

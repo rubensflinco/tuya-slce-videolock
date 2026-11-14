@@ -24,6 +24,16 @@
         "data_description": {
           "device_id": "Nome, categoria e Device ID da conta Tuya Cloud."
         }
+      },
+      "manual_device": {
+        "title": "Informe o Device ID",
+        "description": "A Cloud não devolveu lista de fechaduras (conta Smart Life pode estar desvinculada, ou o endpoint de lista veio vazio).\n\nCole o **Device ID** do console Tuya Cloud (Devices) ou do Smart Life → dispositivo → Informações do dispositivo.\n\nNeste apto a SL-CE costuma ser `eba0b0f3d9b38977ed8b0a`.\n\nConfirme também o vínculo do app em [projeto Cloud]({tuya_project_url}) → Devices → Link Tuya App Account.",
+        "data": {
+          "device_id": "Device ID"
+        },
+        "data_description": {
+          "device_id": "ID Tuya do device (letras/números, ex.: eba0…)."
+        }
       }
     },
     "abort": {
