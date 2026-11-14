@@ -69,8 +69,22 @@ O trial **IoT Video Live Stream** é **grátis** (Free Trial); não é plano pag
 
 **Nesta integração (v0.4.3+):** a câmera tenta primeiro reaproveitar o manager Sharing da integração oficial `tuya` (ou `xtend_tuya`) se o mesmo `device_id` estiver carregado — mesmo caminho do outro addon, sem trial. OpenAPI do projeto fica só como fallback.
 
+### Spinner eterno / `Invalid data` / 404 no stream worker
+
+Sintoma: more-info da câmera fica no loading (às vezes nem anima), log:
+
+```
+Error opening stream (Invalid data found when processing input, https://…m3u8…)
+Not Found error opening stream (… rtsps://wework-…stream.iot-11.com…)
+```
+
+Causa: Sharing **conseguiu** URL, mas (1) HLS da Tuya costuma quebrar o demuxer do HA e (2) URLs assinadas **expiram** e o HA reutiliza a sessão antiga.
+
+Mitigação em **0.4.5**: preferir **RTSP** no Sharing + `async_create_stream` descarta o `Stream` anterior a cada abertura (padrão Xtend #1067).
+
 ### Outros
 
 - Sem URL → `stream_error` nos atributos da câmera + log  
-- Com URL mas tela preta → testar `ffmpeg` no HA; forçar `hls` se RTSP falhar no host  
+- Com URL mas tela preta → conferir log `stream_worker`; reiniciar abertura da câmera (re-allocate)  
+ 
  

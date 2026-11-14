@@ -1,4 +1,4 @@
-"""Camera platform — Tuya Cloud stream allocate (HLS/RTSP) + ffmpeg snapshot."""
+"""Camera platform — Sharing/OpenAPI allocate + fresh stream on each open."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
+from homeassistant.components.stream import Stream
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -38,12 +39,11 @@ async def async_setup_entry(
 
 
 class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
-    """Videolock camera via Cloud stream allocate.
+    """Videolock camera via Sharing (preferred) or Cloud OpenAPI allocate.
 
-    On each stream start / snapshot, allocates a fresh signed URL from Tuya
-    (URLs expire). Prefer HLS for Home Assistant ffmpeg; fall back to RTSP.
-
-    HA Core exposes ``Camera`` (not ``CameraEntity``) on current releases.
+    Tuya signed URLs expire within seconds if unused / minutes if used. HA's
+    stream worker keeps the old URL → stuck spinner + ``Invalid data`` / 404.
+    We discard the previous ``Stream`` on each open (same idea as Xtend).
     """
 
     _attr_has_entity_name = True
@@ -89,35 +89,43 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
             attrs["stream_error"] = self._last_stream_error
             if "not subscribed" in self._last_stream_error.lower():
                 attrs["stream_fix_hint"] = (
-                    "Ative o trial IoT Video Live Stream no projeto Tuya Cloud "
-                    "(Cloud → Cloud Services / Service API), como no Xtend Tuya."
+                    "Ative o trial gratuito IoT Video Live Stream no projeto "
+                    "Tuya Cloud (Cloud → Cloud Services), ou mantenha a "
+                    "integração oficial Tuya carregada para Sharing."
                 )
         return attrs
 
-    async def stream_source(self) -> str | None:
-        """Return a live stream URL (Sharing first, then Cloud OpenAPI).
+    async def async_create_stream(self) -> Stream | None:
+        """Always start a new HA Stream so ``stream_source`` reallocates."""
+        old_stream = self.stream
+        if old_stream is not None:
+            await old_stream.stop()
+            if self.stream is old_stream:
+                self.stream = None
+        return await super().async_create_stream()
 
-        Official Tuya / Xtend use the Smart Life Sharing session — that path
-        does **not** need IoT Video Live Stream on the developer project.
-        Cloud OpenAPI allocate is only a fallback when Sharing is unavailable.
-        """
-        # 1) Reuse already-logged-in Tuya / Xtend Sharing (same as the app)
-        for stype in (
-            self._preferred_stream,
-            "rtsp",
-            "hls",
-        ):
-            if not stype:
-                continue
+    async def stream_source(self) -> str | None:
+        """Return a freshly allocated live stream URL."""
+        # Always try RTSP before HLS for Sharing — HA stream worker often fails
+        # on Tuya HLS (Invalid data / session expired) even when allocate succeeds.
+        sharing_order = ("rtsp", "hls")
+
+        # 1) Smart Life Sharing (same path as official Tuya / Xtend allocate)
+        for stype in sharing_order:
             url, label = await async_allocate_via_sharing(
                 self.hass, self._device_id, stype
             )
             if url:
                 self._last_stream_type = label or stype
                 self._last_stream_error = None
+                _LOGGER.info(
+                    "Using %s stream for %s",
+                    self._last_stream_type,
+                    self._device_id,
+                )
                 return url
 
-        # 2) Cloud project OpenAPI (needs IoT Video Live Stream authorized)
+        # 2) Cloud OpenAPI fallback
         url, used, err = await self._api.async_allocate_stream_preferred(
             self._device_id, self._preferred_stream
         )
@@ -125,22 +133,18 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
         self._last_stream_error = err
         if not url:
             _LOGGER.error(
-                "Could not allocate stream for %s — Sharing unavailable and "
-                "Cloud OpenAPI failed (preferred=%s): %s. "
-                "Keep the official Tuya integration loaded for this device, "
-                "or authorize IoT Video Live Stream on the Cloud project.",
+                "Could not allocate stream for %s (preferred=%s): %s",
                 self._device_id,
                 self._preferred_stream,
                 err or "unknown",
             )
             return None
-        _LOGGER.debug("Allocated %s stream for %s via OpenAPI", used, self._device_id)
         return url
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Grab a still via ffmpeg from the allocated stream."""
+        """Grab a still via ffmpeg from a freshly allocated stream."""
         source = await self.stream_source()
         if not source:
             return None
@@ -149,10 +153,14 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
         except ImportError:
             _LOGGER.warning("ffmpeg component unavailable for snapshot")
             return None
+        # RTSP from Tuya is often TCP-only behind their edge
+        extra = None
+        if source.lower().startswith("rtsp"):
+            extra = "-rtsp_transport tcp"
         return await async_get_image(
             self.hass,
             source,
-            extra_cmd=None,
+            extra_cmd=extra,
             width=width,
             height=height,
         )

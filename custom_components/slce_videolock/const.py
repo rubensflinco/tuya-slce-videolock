@@ -14,7 +14,8 @@ CONF_STREAM_TYPE = "stream_type"
 # Production RuGiu device (docs/device-sl-ce.md)
 DEFAULT_DEVICE_ID = "eba0b0f3d9b38977ed8b0a"
 DEFAULT_REGION = "us"
-DEFAULT_STREAM_TYPE = "hls"
+# Official HA Tuya uses RTSP; Tuya HLS often expires / breaks HA stream worker
+DEFAULT_STREAM_TYPE = "rtsp"
 DEFAULT_AUTO_LOCK_DELAY = 3
 UPDATE_INTERVAL_SECONDS = 60
 
@@ -57,7 +58,7 @@ REMOTE_UNLOCKS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/remote-unlocks"
 
 # Preferred stream order for HA ffmpeg (docs: developer.tuya.com IoT Video Live Stream)
 # Order used after the config preferred type (docs/camera-todo.md)
-STREAM_TYPE_PREFERENCE: tuple[str, ...] = ("rtsp", "hls", "flv", "rtmp")
+STREAM_TYPE_PREFERENCE: tuple[str, ...] = ("rtsp", "hls")
 
 # Tuya product categories this integration supports (config-flow device picker)
 # Align with tuya-smart-lock + videolock (SL-CE)
