@@ -1,4 +1,4 @@
-"""Config flow for SL-CE Videolock — validates Cloud credentials + device."""
+"""Config flow for Tuya SL-CE Videolock — friendly form + Cloud validation."""
 
 from __future__ import annotations
 
@@ -21,32 +21,61 @@ from .const import (
     DEFAULT_REGION,
     DOMAIN,
     REGION_LABELS,
+    TUYA_PROJECT_URL,
 )
 from .tuya_api import TuyaApiError, TuyaCloudApi
 
 _LOGGER = logging.getLogger(__name__)
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_ACCESS_ID): selector.TextSelector(),
-        vol.Required(CONF_ACCESS_SECRET): selector.TextSelector(
-            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-        ),
-        vol.Required(CONF_DEVICE_ID, default=DEFAULT_DEVICE_ID): selector.TextSelector(),
-        vol.Required(CONF_REGION, default=DEFAULT_REGION): selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                options=[
-                    {"value": key, "label": label}
-                    for key, label in REGION_LABELS.items()
-                ],
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            )
-        ),
-    }
-)
+# Region aliases from platform.tuya.com → stored OpenAPI key
+_REGION_ALIASES: dict[str, str] = {
+    "ay": "cn",
+    "az": "us",
+    "america": "us",
+    "americas": "us",
+    "europe": "eu",
+    "china": "cn",
+    "india": "in",
+}
 
 
-async def _validate_input(user_input: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any]]:
+def _normalize_region(raw: str | None) -> str:
+    key = (raw or DEFAULT_REGION).strip().lower()
+    key = _REGION_ALIASES.get(key, key)
+    if key not in REGION_LABELS:
+        return DEFAULT_REGION
+    return key
+
+
+def _user_schema() -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(CONF_ACCESS_ID): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+            ),
+            vol.Required(CONF_ACCESS_SECRET): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+            ),
+            vol.Required(CONF_DEVICE_ID, default=DEFAULT_DEVICE_ID): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+            ),
+            vol.Required(CONF_REGION, default=DEFAULT_REGION): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        {"value": key, "label": label}
+                        for key, label in REGION_LABELS.items()
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    translation_key="region",
+                )
+            ),
+        }
+    )
+
+
+async def _validate_input(
+    user_input: dict[str, Any],
+) -> tuple[dict[str, str], dict[str, Any]]:
     """Validate credentials and that device_id is reachable.
 
     Returns (errors, extras) where extras may include device_name.
@@ -76,7 +105,6 @@ async def _validate_input(user_input: dict[str, Any]) -> tuple[dict[str, str], d
                 errors["base"] = "cannot_connect"
             return errors, extras
 
-        # Soft-check remote unlock; warn in logs but do not block setup
         try:
             remote_ok = await api.async_check_remote_unlock(device_id)
             if not remote_ok:
@@ -100,7 +128,7 @@ async def _validate_input(user_input: dict[str, Any]) -> tuple[dict[str, str], d
 
 
 class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for SL-CE Videolock."""
+    """Handle a config flow for Tuya SL-CE Videolock."""
 
     VERSION = 1
 
@@ -113,9 +141,7 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_ACCESS_ID: user_input[CONF_ACCESS_ID].strip(),
                 CONF_ACCESS_SECRET: user_input[CONF_ACCESS_SECRET].strip(),
                 CONF_DEVICE_ID: user_input[CONF_DEVICE_ID].strip(),
-                CONF_REGION: (user_input.get(CONF_REGION) or DEFAULT_REGION)
-                .strip()
-                .lower(),
+                CONF_REGION: _normalize_region(user_input.get(CONF_REGION)),
             }
             errors, extras = await _validate_input(user_input)
             if not errors:
@@ -130,10 +156,16 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=STEP_USER_DATA_SCHEMA,
+            data_schema=self.add_suggested_values_to_schema(
+                _user_schema(),
+                {
+                    CONF_DEVICE_ID: DEFAULT_DEVICE_ID,
+                    CONF_REGION: DEFAULT_REGION,
+                },
+            ),
             errors=errors,
             description_placeholders={
                 "device_hint": DEFAULT_DEVICE_ID,
-                "iot_url": "https://iot.tuya.com",
+                "tuya_project_url": TUYA_PROJECT_URL,
             },
         )
