@@ -33,7 +33,10 @@ class TestStreamAllocate(unittest.IsolatedAsyncioTestCase):
             "result": {"url": "https://example.test/hls/stream.m3u8"},
         }
         with patch.object(client, "_request", new=AsyncMock(return_value=fake)) as req:
-            url = await client.async_allocate_stream("eba0b0f3d9b38977ed8b0a", "hls")
+            url, err = await client.async_allocate_stream(
+                "eba0b0f3d9b38977ed8b0a", "hls"
+            )
+            self.assertIsNone(err)
             self.assertEqual(url, "https://example.test/hls/stream.m3u8")
             req.assert_awaited_once()
             self.assertEqual(req.await_args.args[0], "POST")
@@ -55,11 +58,33 @@ class TestStreamAllocate(unittest.IsolatedAsyncioTestCase):
         with patch.object(
             client, "_request", new=AsyncMock(side_effect=_side_effect)
         ):
-            url, used = await client.async_allocate_stream_preferred(
+            url, used, err = await client.async_allocate_stream_preferred(
                 "eba0b0f3d9b38977ed8b0a", "hls"
             )
+            self.assertIsNone(err)
             self.assertEqual(url, "rtsps://example/x")
             self.assertEqual(used, "rtsp")
+
+    async def test_allocate_stops_on_not_subscribed(self) -> None:
+        client = api.TuyaCloudApi("id", "secret", region="us")
+        client._token = "tok"
+        client._token_expiry = 9e12
+        req = AsyncMock(
+            return_value={
+                "success": False,
+                "msg": "No permissions. This API is not subscribed.",
+                "code": 28841101,
+            }
+        )
+        with patch.object(client, "_request", new=req):
+            url, used, err = await client.async_allocate_stream_preferred(
+                "eba0b0f3d9b38977ed8b0a", "hls"
+            )
+            self.assertIsNone(url)
+            self.assertIsNone(used)
+            self.assertIn("not subscribed", (err or "").lower())
+            # One attempt only — subscription gate applies to all types
+            self.assertEqual(req.await_count, 1)
 
     async def test_ticket_unlock_body(self) -> None:
         client = api.TuyaCloudApi("id", "secret", region="us")
