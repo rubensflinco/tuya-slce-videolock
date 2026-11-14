@@ -19,19 +19,28 @@ DEFAULT_AUTO_LOCK_DELAY = 3
 UPDATE_INTERVAL_SECONDS = 60
 
 # OpenAPI hosts (Smart Home cloud projects)
+# Platform codes AY/AZ map to CN/US data centers (see platform.tuya.com ?region=)
 API_REGIONS: dict[str, str] = {
     "eu": "openapi.tuyaeu.com",
     "us": "openapi.tuyaus.com",
     "cn": "openapi.tuyacn.com",
     "in": "openapi.tuyain.com",
+    "ay": "openapi.tuyacn.com",
+    "az": "openapi.tuyaus.com",
 }
 
+# Dropdown values stored in config entry (normalized lowercase)
 REGION_LABELS: dict[str, str] = {
-    "eu": "Europe (EU)",
-    "us": "Americas (US)",
-    "cn": "China (CN)",
-    "in": "India (IN)",
+    "us": "Americas / Américas (US · AZ)",
+    "eu": "Europe / Europa (EU)",
+    "cn": "China (CN · AY)",
+    "in": "India / Índia (IN)",
 }
+
+TUYA_PROJECT_URL = (
+    "https://platform.tuya.com/cloud/basic"
+    "?id=p1630510951574getp4q&region=AZ&toptab=project"
+)
 
 # Smart Lock ticket unlock (MIT pattern from nicolasglg/tuya-smart-lock)
 TICKET_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/password-ticket"

@@ -1,6 +1,6 @@
 {
   "domain": "slce_videolock",
-  "name": "SL-CE Videolock",
+  "name": "Tuya SL-CE Videolock",
   "codeowners": ["@rubensflinco"],
   "config_flow": true,
   "dependencies": ["ffmpeg"],
@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/rubensflinco/tuya-slce-videolock/issues",
   "loggers": ["custom_components.slce_videolock"],
   "requirements": [],
-  "version": "0.3.0"
+  "version": "0.3.1"
 }
