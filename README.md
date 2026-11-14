@@ -10,7 +10,7 @@ Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores de stat
 | Bateria, online, campainha, last_* | ✅ Polling Cloud (~60 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
 | Stream da câmera | ✅ `stream/actions/allocate` (HLS/RTSP/…) + ffmpeg | Docs Tuya; comportamento estudado em [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **não copiado**) — ver [`docs/camera-todo.md`](docs/camera-todo.md) |
 
-Versão atual: **0.3.0**.
+Versão atual: **0.3.1**.
 
 ## Por que existe
 
@@ -52,7 +52,7 @@ Identificador no registry: `(slce_videolock, <device_id>)`.
 | Plataforma | Entidades |
 |------------|-----------|
 | `lock` | Fechadura (ticket unlock/lock) |
-| `sensor` | Bateria, last fingerprint/password/card, app unlocks, temporary codes, last alarm, pedidos |
+| `sensor` | Bateria, last fingerprint/password/card, app unlocks, temporary codes, last alarm, pedidos / last contact |
 | `binary_sensor` | Online, Campainha, Alerta de coação |
 | `camera` | Stream via allocate + snapshot ffmpeg |
 
