@@ -39,7 +39,7 @@ Device RuGiu de referência: `eba0b0f3d9b38977ed8b0a` — ver [`docs/device-sl-c
 
 ### HACS
 
-Repositório custom (quando publicado): `rubensflinco/slce-videolock` como Integration.
+Repositório custom (quando publicado): `rubensflinco/tuya-slce-videolock` como Integration.
 
 ## Entidades (mesmo device)
 

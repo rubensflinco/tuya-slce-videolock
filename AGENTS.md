@@ -1,6 +1,6 @@
 # Briefing para agentes (Cursor / cloud / Devin)
 
-Você está no repositório **`slce-videolock`**: integração Home Assistant custom que unifica a **Fechadura SL-CE (Wi-Fi) videolock** num **único device**.
+Você está no repositório **`tuya-slce-videolock`**: integração Home Assistant custom que unifica a **Fechadura SL-CE (Wi-Fi) videolock** num **único device**.
 
 ## Missão
 
