@@ -35,6 +35,14 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class TuyaApiError(Exception):
+    """Raised when the Tuya Cloud API returns an error payload."""
+
+    def __init__(self, message: str, *, code: Any = None) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 def resolve_api_host(region: str) -> str:
     """Map region code or hostname to OpenAPI host."""
     key = (region or DEFAULT_REGION).strip().lower()
@@ -194,20 +202,33 @@ class TuyaCloudApi:
         except (ConnectionError, aiohttp.ClientError, KeyError, TypeError, ValueError):
             return False
 
-    async def async_get_device(self, device_id: str) -> dict[str, Any] | None:
-        """Fetch device metadata (name, online, product_name)."""
+    async def async_get_device_info(self, device_id: str) -> dict[str, Any]:
+        """Fetch device metadata (name, online, product_name). Raises TuyaApiError."""
         resp = await self._request("GET", DEVICE_ENDPOINT.format(device_id=device_id))
         if not resp.get("success"):
-            _LOGGER.warning("Device info failed: %s", resp.get("msg"))
-            return None
+            raise TuyaApiError(
+                f"device info: {resp.get('msg')}",
+                code=resp.get("code"),
+            )
         result = resp.get("result")
-        return result if isinstance(result, dict) else None
+        return result if isinstance(result, dict) else {}
+
+    async def async_get_device(self, device_id: str) -> dict[str, Any] | None:
+        """Fetch device metadata; return None on soft failure (coordinator)."""
+        try:
+            return await self.async_get_device_info(device_id)
+        except TuyaApiError as err:
+            _LOGGER.warning("Device info failed: %s", err)
+            return None
 
     async def async_get_status(self, device_id: str) -> dict[str, Any]:
         """Return DP code→value map."""
         resp = await self._request("GET", STATUS_ENDPOINT.format(device_id=device_id))
         if not resp.get("success"):
-            raise ConnectionError(f"Status error: {resp.get('msg')}")
+            raise TuyaApiError(
+                f"Status error: {resp.get('msg')}",
+                code=resp.get("code"),
+            )
         raw = resp.get("result")
         if isinstance(raw, list):
             return parse_status_list(raw)
@@ -226,12 +247,10 @@ class TuyaCloudApi:
     async def async_get_lock_state(self, device_id: str) -> bool | None:
         """True if unlocked, False if locked, None if unknown."""
         status = await self.async_get_status(device_id)
-        if status.get(DP_AUTOMATIC_LOCK) is True:
-            return False
-        motor = status.get(DP_LOCK_MOTOR_STATE)
-        if isinstance(motor, bool):
-            return motor
-        return None
+        locked = infer_is_locked(status)
+        if locked is None:
+            return None
+        return not locked
 
     async def async_check_remote_unlock(self, device_id: str) -> bool:
         path = REMOTE_UNLOCKS_ENDPOINT.format(device_id=device_id)

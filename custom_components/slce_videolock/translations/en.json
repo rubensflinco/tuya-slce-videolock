@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "SL-CE Videolock",
-        "description": "Tuya IoT project credentials (IoT Core + Smart Lock Open Service). Default RuGiu device: {device_hint}. Portal: {iot_url}",
+        "description": "Tuya IoT project credentials (IoT Core + Smart Lock Open Service + IoT Video Live Stream). Default RuGiu device: {device_hint}. Portal: {iot_url}. Camera uses OpenAPI stream allocate (HLS/RTSP).",
         "data": {
           "access_id": "Access ID",
           "access_secret": "Access Secret",

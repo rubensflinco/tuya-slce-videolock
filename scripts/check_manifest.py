@@ -30,7 +30,15 @@ def main() -> int:
     if data["domain"] != "slce_videolock":
         print("FAIL: domain mismatch", data["domain"])
         return 1
-    for name in ("__init__.py", "config_flow.py", "lock.py", "const.py"):
+    for name in (
+        "__init__.py",
+        "config_flow.py",
+        "lock.py",
+        "camera.py",
+        "const.py",
+        "tuya_api.py",
+        "coordinator.py",
+    ):
         p = MANIFEST.parent / name
         if not p.is_file():
             print("FAIL: missing", p.name)

@@ -58,10 +58,17 @@ Câmera: não copiar código GPL do xtend_tuya; implementar allocate OpenAPI dep
 
 `eba0b0f3d9b38977ed8b0a` — não commitar Access Secret.
 
+## Câmera (Cloud allocate)
+
+- Endpoint: `POST /v1.0/devices/{id}/stream/actions/allocate` body `{"type":"hls"|"rtsp"}`
+- Código: `tuya_api.async_allocate_stream*` + `camera.stream_source`
+- Detalhes / teste HAOS: `docs/camera-todo.md`
+- **Não** copiar GPL de xtend_tuya
+
 ## Checklist PR
 
-- [ ] Unlock path documentado (cloud ticket)  
-- [ ] Entidades no mesmo device  
+- [x] Unlock path documentado (cloud ticket)  
+- [x] Entidades no mesmo device (incl. câmera)  
 - [ ] Sem secrets no git  
 - [ ] Versão em `manifest.json` bump  
 - [ ] README atualizado

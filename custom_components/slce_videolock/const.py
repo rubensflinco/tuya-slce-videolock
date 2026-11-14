@@ -44,7 +44,8 @@ STREAM_ALLOCATE_ENDPOINT = "/v1.0/devices/{device_id}/stream/actions/allocate"
 REMOTE_UNLOCKS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/remote-unlocks"
 
 # Preferred stream order for HA ffmpeg (docs: developer.tuya.com IoT Video Live Stream)
-STREAM_TYPE_PREFERENCE: tuple[str, ...] = ("hls", "rtsp")
+# Order used after the config preferred type (docs/camera-todo.md)
+STREAM_TYPE_PREFERENCE: tuple[str, ...] = ("rtsp", "hls", "flv", "rtmp")
 
 # Status DP codes (videolock / ms) — see docs/device-sl-ce.md
 DP_BATTERY = "residual_electricity"
