@@ -3,18 +3,26 @@
     "step": {
       "user": {
         "title": "Tuya SL-CE Videolock",
-        "description": "Connect the SL-CE smart videolock via Tuya Cloud.\n\n**Where to find the values**\n1. Open your [Tuya Cloud project]({tuya_project_url}) (Overview / Basic Configuration).\n2. Copy **Access ID** and **Access Secret** from the project credentials.\n3. Open **Devices**, pick the lock, and copy the **Device ID**.\n4. Choose the **region** that matches the project data center (this project uses **AZ / Americas**).\n\nAlso enable on the same project: *IoT Core*, *Smart Lock Open Service*, and *IoT Video Live Stream*.\n\nDefault device (RuGiu): `{device_hint}`",
+        "description": "Connect with your Tuya Cloud project credentials.\n\n**Where to find them**\n1. Open your [Tuya Cloud project]({tuya_project_url}) (Overview / Basic Configuration).\n2. Copy **Access ID** and **Access Secret**.\n3. Choose the **region** that matches the project data center (this project uses **AZ / Americas**).\n\nAlso enable: *IoT Core*, *Smart Lock Open Service*, and *IoT Video Live Stream*.\n\nNext step: we will list compatible locks (videolock / smart lock) linked to this project.",
         "data": {
           "access_id": "Access ID",
           "access_secret": "Access Secret",
-          "device_id": "Device ID",
           "region": "Cloud region"
         },
         "data_description": {
           "access_id": "Client ID / Access ID from the Cloud project overview.",
           "access_secret": "Client Secret / Access Secret (keep private).",
-          "device_id": "Tuya device id of the SL-CE lock (Cloud → Devices).",
           "region": "Must match the project data center (AZ → Americas / US)."
+        }
+      },
+      "select_device": {
+        "title": "Select your lock",
+        "description": "Found **{device_count}** compatible device(s) (videolock / smart lock categories). Choose the lock to add.",
+        "data": {
+          "device_id": "Device"
+        },
+        "data_description": {
+          "device_id": "Name, category and Device ID from your Tuya Cloud account."
         }
       }
     },
@@ -24,7 +32,8 @@
     "error": {
       "cannot_connect": "Could not reach Tuya Cloud — check region and network",
       "invalid_auth": "Invalid Access ID/Secret, or wrong region",
-      "device_not_found": "Device ID not found or not linked to this Cloud project"
+      "device_not_found": "Selected device is invalid — go back and try again",
+      "no_compatible_devices": "No videolock / smart lock found in this project. Link the Smart Life account and confirm the device category is supported."
     }
   }
 }

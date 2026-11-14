@@ -29,6 +29,7 @@ from .const import (
     STATUS_ENDPOINT,
     STREAM_ALLOCATE_ENDPOINT,
     STREAM_TYPE_PREFERENCE,
+    SUPPORTED_LOCK_CATEGORIES,
     TICKET_ENDPOINT,
 )
 
@@ -66,6 +67,43 @@ def parse_status_list(result: list[dict[str, Any]] | None) -> dict[str, Any]:
             continue
         out[str(code)] = item.get("value")
     return out
+
+
+def filter_lock_devices(
+    devices: list[dict[str, Any]],
+    categories: frozenset[str] = SUPPORTED_LOCK_CATEGORIES,
+) -> list[dict[str, Any]]:
+    """Keep devices whose category is a supported lock / videolock type."""
+    out: list[dict[str, Any]] = []
+    for dev in devices:
+        if not isinstance(dev, dict):
+            continue
+        category = str(dev.get("category") or "").strip().lower()
+        device_id = str(dev.get("id") or "").strip()
+        if not device_id or category not in categories:
+            continue
+        out.append(dev)
+    out.sort(
+        key=lambda d: (
+            str(d.get("name") or "").lower(),
+            str(d.get("id") or ""),
+        )
+    )
+    return out
+
+
+def format_device_option(dev: dict[str, Any]) -> str:
+    """Human label for config-flow dropdown: Name (category) — id."""
+    name = str(dev.get("name") or "Device").strip() or "Device"
+    category = str(dev.get("category") or "?").strip() or "?"
+    device_id = str(dev.get("id") or "").strip()
+    online = dev.get("online")
+    suffix = ""
+    if online is False:
+        suffix = " [offline]"
+    elif online is True:
+        suffix = " [online]"
+    return f"{name} ({category}) — {device_id}{suffix}"
 
 
 def infer_is_locked(status: dict[str, Any]) -> bool | None:
@@ -212,6 +250,52 @@ class TuyaCloudApi:
             )
         result = resp.get("result")
         return result if isinstance(result, dict) else {}
+
+    async def async_list_devices(self) -> list[dict[str, Any]]:
+        """List devices linked to the Cloud project / app account.
+
+        Tries Smart Home user devices first, then IoT Core paginated list.
+        """
+        await self._ensure_token()
+        devices: list[dict[str, Any]] = []
+
+        if self._uid:
+            path = f"/v1.0/users/{self._uid}/devices"
+            resp = await self._request("GET", path)
+            if resp.get("success"):
+                result = resp.get("result")
+                if isinstance(result, list):
+                    devices = [d for d in result if isinstance(d, dict)]
+                elif isinstance(result, dict):
+                    for key in ("devices", "list"):
+                        raw = result.get(key)
+                        if isinstance(raw, list):
+                            devices = [d for d in raw if isinstance(d, dict)]
+                            break
+            else:
+                _LOGGER.debug(
+                    "users/%s/devices failed: %s",
+                    self._uid,
+                    resp.get("msg"),
+                )
+
+        if not devices:
+            # Fallback: IoT Core device list (page 1)
+            path = "/v1.0/iot-03/devices?page_size=100&page_no=1"
+            resp = await self._request("GET", path)
+            if resp.get("success"):
+                result = resp.get("result") or {}
+                raw = result.get("list") if isinstance(result, dict) else None
+                if isinstance(raw, list):
+                    devices = [d for d in raw if isinstance(d, dict)]
+            else:
+                _LOGGER.debug("iot-03 devices failed: %s", resp.get("msg"))
+
+        return devices
+
+    async def async_list_lock_devices(self) -> list[dict[str, Any]]:
+        """List only supported lock / videolock categories."""
+        return filter_lock_devices(await self.async_list_devices())
 
     async def async_get_device(self, device_id: str) -> dict[str, Any] | None:
         """Fetch device metadata; return None on soft failure (coordinator)."""

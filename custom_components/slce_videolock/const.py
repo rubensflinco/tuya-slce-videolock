@@ -56,6 +56,21 @@ REMOTE_UNLOCKS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/remote-unlocks"
 # Order used after the config preferred type (docs/camera-todo.md)
 STREAM_TYPE_PREFERENCE: tuple[str, ...] = ("rtsp", "hls", "flv", "rtmp")
 
+# Tuya product categories this integration supports (config-flow device picker)
+# Align with tuya-smart-lock + videolock (SL-CE)
+SUPPORTED_LOCK_CATEGORIES: frozenset[str] = frozenset(
+    {
+        "videolock",
+        "photolock",
+        "ms",
+        "mk",
+        "jtmsbh",
+        "jtmspro",
+        "gyms",
+        "hotelms",
+    }
+)
+
 # Status DP codes (videolock / ms) — see docs/device-sl-ce.md
 DP_BATTERY = "residual_electricity"
 DP_DOORBELL = "doorbell"

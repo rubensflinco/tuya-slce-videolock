@@ -1,14 +1,20 @@
 {
   "domain": "slce_videolock",
   "name": "Tuya SL-CE Videolock",
-  "codeowners": ["@rubensflinco"],
+  "codeowners": [
+    "@rubensflinco"
+  ],
   "config_flow": true,
-  "dependencies": ["ffmpeg"],
+  "dependencies": [
+    "ffmpeg"
+  ],
   "documentation": "https://github.com/rubensflinco/tuya-slce-videolock",
   "integration_type": "device",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/rubensflinco/tuya-slce-videolock/issues",
-  "loggers": ["custom_components.slce_videolock"],
+  "loggers": [
+    "custom_components.slce_videolock"
+  ],
   "requirements": [],
-  "version": "0.3.1"
+  "version": "0.4.0"
 }
