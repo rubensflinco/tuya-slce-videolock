@@ -28,7 +28,7 @@ Também precisa de **IoT Core** + **Smart Lock Open Service** (unlock).
 
 1. Copiar `custom_components/slce_videolock` para `/config/custom_components/` (ou atualizar via HACS).
 2. Reiniciar o Home Assistant.
-3. Settings → Devices & Services → **SL-CE Videolock** (Access ID/Secret, Device ID `eba0b0f3d9b38977ed8b0a`, região do projeto).
+3. Settings → Devices & Services → **Tuya SL-CE Videolock** (Access ID/Secret, Device ID `eba0b0f3d9b38977ed8b0a`, região do projeto).
 4. No **mesmo** device, conferir lock + sensores + câmera.
 5. Abrir a entidade câmera (More info) e verificar preview/stream.
 6. Se falhar: Settings → System → Logs (`custom_components.slce_videolock`); confirmar serviço Live Stream; testar preferência HLS vs RTSP (options / recriar entry se necessário).
