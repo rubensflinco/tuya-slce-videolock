@@ -1,16 +1,29 @@
-"""SL-CE Videolock — unified unlock + camera + sensors for Tuya videolock."""
+"""SL-CE Videolock — unified unlock + camera stub + sensors for Tuya videolock."""
 
 from __future__ import annotations
+
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import (
+    CONF_ACCESS_ID,
+    CONF_ACCESS_SECRET,
+    CONF_DEVICE_ID,
+    CONF_REGION,
+    DEFAULT_REGION,
+    DOMAIN,
+)
+from .coordinator import SlceVideolockCoordinator
+from .tuya_api import TuyaCloudApi
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.LOCK,
-    # Platform.CAMERA,  # enable when camera path is implemented
+    Platform.CAMERA,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
 ]
@@ -19,7 +32,23 @@ PLATFORMS: list[Platform] = [
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up SL-CE Videolock from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    # Coordinator + API client will be wired here (see AGENTS.md / skills).
+
+    api = TuyaCloudApi(
+        access_id=entry.data[CONF_ACCESS_ID],
+        access_secret=entry.data[CONF_ACCESS_SECRET],
+        region=entry.data.get(CONF_REGION, DEFAULT_REGION),
+    )
+    device_id = entry.data[CONF_DEVICE_ID]
+    coordinator = SlceVideolockCoordinator(hass, api, device_id)
+
+    await coordinator.async_config_entry_first_refresh()
+
+    hass.data[DOMAIN][entry.entry_id] = {
+        "api": api,
+        "coordinator": coordinator,
+        "device_id": device_id,
+    }
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -28,5 +57,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        data = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        if data and (api := data.get("api")):
+            await api.async_close()
     return unload_ok

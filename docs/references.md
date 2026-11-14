@@ -54,3 +54,5 @@ slce_videolock = SmartLockTicketAPI (unlock)
 ```
 
 Não criar três devices. Não depender de mover entidades entre integrações no HA.
+
+**Licenças:** Smart Lock e Lock Monitor são MIT (adaptar com atribuição). Xtend Tuya é **GPL-3** — estudar comportamento da câmera, mas **não** copiar código; ver `docs/camera-todo.md`.

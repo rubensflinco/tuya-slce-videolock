@@ -39,14 +39,20 @@ custom_components/slce_videolock/
   __init__.py
   manifest.json
   const.py
-  config_flow.py
-  coordinator.py
-  lock.py
-  camera.py
+  config_flow.py          # valida token + device info
+  tuya_api.py             # ticket unlock + status (MIT refs)
+  coordinator.py          # cloud poll ~60s
+  entity.py               # DeviceInfo (DOMAIN, device_id)
+  lock.py                 # ticket unlock/lock
+  camera.py               # stub — ver docs/camera-todo.md (GPL xtend)
   sensor.py
   binary_sensor.py
   strings.json
+  translations/en.json
 ```
+
+Unlock real = Cloud ticket (`TICKET_ENDPOINT` → `DOOR_OPERATE_ENDPOINT`), nunca LAN.
+Câmera: não copiar código GPL do xtend_tuya; implementar allocate OpenAPI depois.
 
 ## Device ID de teste (RuGiu)
 

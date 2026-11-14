@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "SL-CE Videolock",
-        "description": "Tuya IoT Access ID/Secret + Device ID. Device RuGiu padrão: {device_hint}",
+        "description": "Credenciais do projeto Tuya IoT (IoT Core + Smart Lock Open Service). Device RuGiu padrão: {device_hint}. Portal: {iot_url}",
         "data": {
           "access_id": "Access ID",
           "access_secret": "Access Secret",
           "device_id": "Device ID",
-          "region": "Region (AY/AZ/EU/US…)"
+          "region": "Região OpenAPI"
         }
       }
     },
@@ -17,7 +17,8 @@
     },
     "error": {
       "cannot_connect": "Falha ao validar na Cloud Tuya",
-      "invalid_auth": "Access ID/Secret inválidos"
+      "invalid_auth": "Access ID/Secret inválidos (ou região errada)",
+      "device_not_found": "Device ID não encontrado ou sem permissão neste projeto"
     }
   }
 }
