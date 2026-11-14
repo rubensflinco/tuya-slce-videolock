@@ -39,23 +39,36 @@ custom_components/slce_videolock/
   __init__.py
   manifest.json
   const.py
-  config_flow.py
-  coordinator.py
-  lock.py
-  camera.py
+  config_flow.py          # valida token + device info
+  tuya_api.py             # ticket unlock + status (MIT refs)
+  coordinator.py          # cloud poll ~60s
+  entity.py               # DeviceInfo (DOMAIN, device_id)
+  lock.py                 # ticket unlock/lock
+  camera.py               # stub — ver docs/camera-todo.md (GPL xtend)
   sensor.py
   binary_sensor.py
   strings.json
+  translations/en.json
 ```
+
+Unlock real = Cloud ticket (`TICKET_ENDPOINT` → `DOOR_OPERATE_ENDPOINT`), nunca LAN.
+Câmera: não copiar código GPL do xtend_tuya; implementar allocate OpenAPI depois.
 
 ## Device ID de teste (RuGiu)
 
 `eba0b0f3d9b38977ed8b0a` — não commitar Access Secret.
 
+## Câmera (Cloud allocate)
+
+- Endpoint: `POST /v1.0/devices/{id}/stream/actions/allocate` body `{"type":"hls"|"rtsp"}`
+- Código: `tuya_api.async_allocate_stream*` + `camera.stream_source`
+- Detalhes / teste HAOS: `docs/camera-todo.md`
+- **Não** copiar GPL de xtend_tuya
+
 ## Checklist PR
 
-- [ ] Unlock path documentado (cloud ticket)  
-- [ ] Entidades no mesmo device  
+- [x] Unlock path documentado (cloud ticket)  
+- [x] Entidades no mesmo device (incl. câmera)  
 - [ ] Sem secrets no git  
 - [ ] Versão em `manifest.json` bump  
 - [ ] README atualizado

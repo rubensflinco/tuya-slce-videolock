@@ -36,12 +36,12 @@ Ver [`docs/references.md`](docs/references.md). Antes de codificar unlock/câmer
 
 ## Entregáveis MVP
 
-- [ ] Scaffold HA válido (já parcialmente criado)  
-- [ ] Config flow: Access ID, Access Secret, Device ID, (opcional) region  
-- [ ] Entity `lock` funcional (dry-run / mock se sem credenciais)  
-- [ ] Entity `camera` ou stub documentado se stream exigir ffmpeg/SDK extra  
-- [ ] Sensors: battery, online, doorbell (+ best-effort last unlock)  
-- [ ] `hacs.json` + README instalação  
+- [x] Scaffold HA válido  
+- [x] Config flow: Access ID, Access Secret, Device ID, region, stream_type  
+- [x] Entity `lock` via Cloud ticket  
+- [x] Entity `camera` via stream allocate (HLS/RTSP) + ffmpeg  
+- [x] Sensors: battery, online, doorbell (+ last unlock / alarms)  
+- [x] `hacs.json` + README instalação  
 - [ ] Skill `.cursor/skills/slce-videolock-dev/SKILL.md` atualizada se o fluxo mudar  
 
 ## Skills do repo

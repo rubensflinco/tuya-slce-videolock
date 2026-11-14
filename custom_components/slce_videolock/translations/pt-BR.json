@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tuya SL-CE Videolock",
+        "description": "Conecte a fechadura videolock SL-CE pela nuvem Tuya.\n\n**Onde pegar os dados**\n1. Abra o [projeto na Tuya Cloud]({tuya_project_url}) (Visão geral / Configuração básica).\n2. Copie o **Access ID** e o **Access Secret** das credenciais do projeto.\n3. Em **Devices / Dispositivos**, selecione a fechadura e copie o **Device ID**.\n4. Escolha a **região** igual ao data center do projeto (este projeto usa **AZ / Américas**).\n\nNo mesmo projeto, ative também: *IoT Core*, *Smart Lock Open Service* e *IoT Video Live Stream*.\n\nDevice padrão (RuGiu): `{device_hint}`",
+        "data": {
+          "access_id": "Access ID",
+          "access_secret": "Access Secret",
+          "device_id": "Device ID",
+          "region": "Região da nuvem"
+        },
+        "data_description": {
+          "access_id": "Client ID / Access ID na visão geral do projeto Cloud.",
+          "access_secret": "Client Secret / Access Secret (mantenha em segredo).",
+          "device_id": "ID Tuya da fechadura SL-CE (Cloud → Devices).",
+          "region": "Deve bater com o data center do projeto (AZ → Américas / US)."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Este Device ID já está configurado"
+    },
+    "error": {
+      "cannot_connect": "Não foi possível falar com a Cloud Tuya — confira região e rede",
+      "invalid_auth": "Access ID/Secret inválidos, ou região errada",
+      "device_not_found": "Device ID não encontrado ou não vinculado a este projeto Cloud"
+    }
+  }
+}
