@@ -51,15 +51,26 @@ async def async_allocate_via_sharing(
     """Return ``(url, source_label)`` using an already-loaded Tuya Sharing manager."""
     stype = (stream_type or "rtsp").strip().lower()
 
+    saw_domain = False
     for domain in _SHARING_DOMAINS:
-        for entry in hass.config_entries.async_entries(domain):
-            if entry.state != ConfigEntryState.LOADED:
+        entries = list(hass.config_entries.async_entries(domain))
+        if entries:
+            saw_domain = True
+        for entry in entries:
+            state = entry.state
+            loaded = state == ConfigEntryState.LOADED or str(state) == "loaded"
+            if not loaded:
+                _LOGGER.warning(
+                    "Skip %s entry %s — state=%s (need loaded for Sharing stream)",
+                    domain,
+                    entry.entry_id,
+                    state,
+                )
                 continue
 
             manager = _manager_from_entry(entry)
-            if manager is None and domain == "tuya":
-                # Current HA Core: entry.runtime_data is DeviceListener
-                listener = entry.runtime_data
+            if manager is None:
+                listener = getattr(entry, "runtime_data", None)
                 manager = getattr(listener, "manager", None)
 
             if manager is None:
@@ -81,10 +92,12 @@ async def async_allocate_via_sharing(
             if manager is None or not hasattr(
                 manager, "get_device_stream_allocate"
             ):
-                _LOGGER.debug(
-                    "No Sharing manager with allocate on %s entry %s",
+                _LOGGER.warning(
+                    "No Sharing manager with allocate on %s entry %s "
+                    "(runtime_data=%s)",
                     domain,
                     entry.entry_id,
+                    type(getattr(entry, "runtime_data", None)).__name__,
                 )
                 continue
             if not _device_known(manager, device_id):
@@ -127,4 +140,10 @@ async def async_allocate_via_sharing(
                 stype,
             )
 
+    if not saw_domain:
+        _LOGGER.warning(
+            "No tuya/xtend_tuya config entries — cannot reuse Smart Life Sharing "
+            "for stream (device %s)",
+            device_id,
+        )
     return None, None
