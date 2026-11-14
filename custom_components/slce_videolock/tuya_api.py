@@ -60,6 +60,22 @@ def parse_status_list(result: list[dict[str, Any]] | None) -> dict[str, Any]:
     return out
 
 
+def infer_is_locked(status: dict[str, Any]) -> bool | None:
+    """Infer locked state from status DPs.
+
+    Returns True if locked, False if unlocked, None if unknown.
+    When automatic_lock is enabled, treat as locked (Wi-Fi videolocks often
+    freeze lock_motor_state).
+    """
+    if status.get(DP_AUTOMATIC_LOCK) is True:
+        return True
+    motor = status.get(DP_LOCK_MOTOR_STATE)
+    if motor is None:
+        return None
+    # lock_motor_state True typically means unlocked/open on Tuya locks
+    return not bool(motor)
+
+
 class TuyaCloudApi:
     """Async Tuya Cloud client shared by lock, sensors and camera."""
 

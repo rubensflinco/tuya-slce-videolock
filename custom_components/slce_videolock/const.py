@@ -8,6 +8,7 @@ CONF_ACCESS_ID = "access_id"
 CONF_ACCESS_SECRET = "access_secret"
 CONF_DEVICE_ID = "device_id"
 CONF_REGION = "region"
+CONF_DEVICE_NAME = "device_name"
 CONF_STREAM_TYPE = "stream_type"
 
 # Production RuGiu device (docs/device-sl-ce.md)
@@ -23,6 +24,13 @@ API_REGIONS: dict[str, str] = {
     "us": "openapi.tuyaus.com",
     "cn": "openapi.tuyacn.com",
     "in": "openapi.tuyain.com",
+}
+
+REGION_LABELS: dict[str, str] = {
+    "eu": "Europe (EU)",
+    "us": "Americas (US)",
+    "cn": "China (CN)",
+    "in": "India (IN)",
 }
 
 # Smart Lock ticket unlock (MIT pattern from nicolasglg/tuya-smart-lock)
@@ -56,6 +64,7 @@ DP_LOCK_MOTOR_STATE = "lock_motor_state"
 MANUFACTURER = "Novadigital / Tuya"
 MODEL = "SL-CE Elegance (videolock)"
 DEVICE_NAME = "Fechadura Inteligente SL-CE (Wi-Fi)"
+DEFAULT_DEVICE_NAME = DEVICE_NAME
 
 # Reference integrations (study only — do not import at runtime)
 REF_XTEND_TUYA = "https://github.com/azerty9971/xtend_tuya"

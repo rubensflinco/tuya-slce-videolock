@@ -1,7 +1,4 @@
-"""Binary sensors — online + doorbell (+ optional hijack).
-
-Patterns adapted from crestall/ha-tuya-lock-monitor (MIT).
-"""
+"""Binary sensors — online, doorbell, hijack."""
 
 from __future__ import annotations
 
@@ -16,26 +13,24 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, DP_DOORBELL
+from .const import DOMAIN, DP_DOORBELL, DP_HIJACK
 from .coordinator import SlceVideolockCoordinator
-from .entity import SlceCoordinatorEntity
+from .device import build_device_info
 
 
 @dataclass(frozen=True, kw_only=True)
 class SlceBinaryDescription(BinarySensorEntityDescription):
-    """Binary sensor with status key or special online flag."""
-
     status_key: str = ""
-    online_flag: bool = False
+    from_meta_online: bool = False
 
 
 BINARY_SENSORS: tuple[SlceBinaryDescription, ...] = (
     SlceBinaryDescription(
         key="online",
         name="Online",
-        translation_key="online",
-        online_flag=True,
+        from_meta_online=True,
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:cloud-check",
@@ -43,7 +38,6 @@ BINARY_SENSORS: tuple[SlceBinaryDescription, ...] = (
     SlceBinaryDescription(
         key="doorbell",
         name="Campainha",
-        translation_key="doorbell",
         status_key=DP_DOORBELL,
         device_class=BinarySensorDeviceClass.OCCUPANCY,
         icon="mdi:doorbell",
@@ -51,8 +45,7 @@ BINARY_SENSORS: tuple[SlceBinaryDescription, ...] = (
     SlceBinaryDescription(
         key="hijack",
         name="Alerta de coação",
-        translation_key="hijack",
-        status_key="hijack",
+        status_key=DP_HIJACK,
         device_class=BinarySensorDeviceClass.TAMPER,
         icon="mdi:alert-octagon",
     ),
@@ -64,19 +57,20 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up binary sensors."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: SlceVideolockCoordinator = data["coordinator"]
-    device_id: str = data["device_id"]
+    coordinator: SlceVideolockCoordinator = hass.data[DOMAIN][entry.entry_id][
+        "coordinator"
+    ]
+    device_id: str = hass.data[DOMAIN][entry.entry_id]["device_id"]
     async_add_entities(
-        SlceBinarySensor(coordinator, device_id, desc) for desc in BINARY_SENSORS
+        [SlceBinarySensor(coordinator, device_id, desc) for desc in BINARY_SENSORS]
     )
 
 
-class SlceBinarySensor(SlceCoordinatorEntity, BinarySensorEntity):
-    """Binary sensor from coordinator data."""
-
+class SlceBinarySensor(
+    CoordinatorEntity[SlceVideolockCoordinator], BinarySensorEntity
+):
     entity_description: SlceBinaryDescription
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -84,19 +78,20 @@ class SlceBinarySensor(SlceCoordinatorEntity, BinarySensorEntity):
         device_id: str,
         description: SlceBinaryDescription,
     ) -> None:
-        super().__init__(coordinator, device_id, description.key)
+        super().__init__(coordinator)
         self.entity_description = description
+        self._attr_unique_id = f"{device_id}_{description.key}"
+        name = coordinator.data.get("name") if coordinator.data else None
+        self._attr_device_info = build_device_info(device_id, name)
 
     @property
     def is_on(self) -> bool | None:
-        if self.coordinator.data is None:
+        if not self.coordinator.data:
             return None
-        if self.entity_description.online_flag:
-            value = self.coordinator.data.get("online")
-        else:
-            value = (self.coordinator.data.get("status") or {}).get(
-                self.entity_description.status_key
-            )
+        if self.entity_description.from_meta_online:
+            return bool(self.coordinator.data.get("online"))
+        status = self.coordinator.data.get("status") or {}
+        value = status.get(self.entity_description.status_key)
         if value is None:
             return None
         return bool(value)
