@@ -61,7 +61,13 @@ Correção (igual [Xtend configure_cameras](https://github.com/azerty9971/xtend_
 3. Confirmar status ativo
 4. No HA: reabrir a entidade câmera (ou recarregar a integração)
 
-Nota: Xtend costuma funcionar via **Sharing / login Smart Life** (outra trilha de auth). Esta integração usa **OpenAPI do projeto** — o trial no *mesmo* Access ID/Secret é obrigatório.
+### Por que o Xtend / Tuya oficial “não pedem assinatura”
+
+Eles **não** usam Access ID/Secret para o stream. Usam a sessão **Smart Life / Sharing** (QR / User Code), a mesma do app — aí a Tuya libera allocate sem o clique em Cloud Services.
+
+O trial **IoT Video Live Stream** é **grátis** (Free Trial); não é plano pago. Só que **não dá** para o addon ativar isso sozinho com Access ID/Secret: a Tuya só autoriza Cloud Services no portal (UI humana). Não existe API pública estável com essas credenciais para “clicar Free Trial” no setup.
+
+**Nesta integração (v0.4.3+):** a câmera tenta primeiro reaproveitar o manager Sharing da integração oficial `tuya` (ou `xtend_tuya`) se o mesmo `device_id` estiver carregado — mesmo caminho do outro addon, sem trial. OpenAPI do projeto fica só como fallback.
 
 ### Outros
 

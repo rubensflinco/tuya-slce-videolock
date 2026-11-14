@@ -10,9 +10,9 @@ Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores de stat
 | Bateria, online, campainha, last_* | ✅ Polling Cloud (~60 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
 | Stream da câmera | ✅ `stream/actions/allocate` (HLS/RTSP/…) + ffmpeg | Docs Tuya; comportamento estudado em [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **não copiado**) — ver [`docs/camera-todo.md`](docs/camera-todo.md) |
 
-Versão atual: **0.4.2**.
+Versão atual: **0.4.4**.
 
-Se a câmera ficar sem imagem e o log mostrar `This API is not subscribed`, ative o trial **IoT Video Live Stream** no projeto Cloud (veja [`docs/camera-todo.md`](docs/camera-todo.md)).
+Câmera: tenta primeiro o stream da integração oficial **Tuya** (sessão Smart Life, como o Xtend — sem trial). Fallback OpenAPI só se precisar; nesse caso o trial **IoT Video Live Stream** é grátis no portal (não dá para o addon “clicar” isso com Access ID/Secret). Detalhes: [`docs/camera-todo.md`](docs/camera-todo.md).
 
 ## Por que existe
 

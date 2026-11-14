@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import CONF_STREAM_TYPE, DEFAULT_STREAM_TYPE, DOMAIN
 from .coordinator import SlceVideolockCoordinator
 from .device import build_device_info
+from .stream_bridge import async_allocate_via_sharing
 from .tuya_api import TuyaCloudApi
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,7 +95,29 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
         return attrs
 
     async def stream_source(self) -> str | None:
-        """Return a freshly allocated live stream URL for HA stream/ffmpeg."""
+        """Return a live stream URL (Sharing first, then Cloud OpenAPI).
+
+        Official Tuya / Xtend use the Smart Life Sharing session — that path
+        does **not** need IoT Video Live Stream on the developer project.
+        Cloud OpenAPI allocate is only a fallback when Sharing is unavailable.
+        """
+        # 1) Reuse already-logged-in Tuya / Xtend Sharing (same as the app)
+        for stype in (
+            self._preferred_stream,
+            "rtsp",
+            "hls",
+        ):
+            if not stype:
+                continue
+            url, label = await async_allocate_via_sharing(
+                self.hass, self._device_id, stype
+            )
+            if url:
+                self._last_stream_type = label or stype
+                self._last_stream_error = None
+                return url
+
+        # 2) Cloud project OpenAPI (needs IoT Video Live Stream authorized)
         url, used, err = await self._api.async_allocate_stream_preferred(
             self._device_id, self._preferred_stream
         )
@@ -102,13 +125,16 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
         self._last_stream_error = err
         if not url:
             _LOGGER.error(
-                "Could not allocate stream for %s (preferred=%s): %s",
+                "Could not allocate stream for %s — Sharing unavailable and "
+                "Cloud OpenAPI failed (preferred=%s): %s. "
+                "Keep the official Tuya integration loaded for this device, "
+                "or authorize IoT Video Live Stream on the Cloud project.",
                 self._device_id,
                 self._preferred_stream,
                 err or "unknown",
             )
             return None
-        _LOGGER.debug("Allocated %s stream for %s", used, self._device_id)
+        _LOGGER.debug("Allocated %s stream for %s via OpenAPI", used, self._device_id)
         return url
 
     async def async_camera_image(
