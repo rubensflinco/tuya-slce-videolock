@@ -1,0 +1,5 @@
+Leia e execute integralmente docs/tarefa-estados-ha-nodered.md.
+
+A integração slce_videolock NÃO está detectando corretamente os estados da fechadura SL-CE que o Node-RED da casa precisa (campainha stuck on, alarme sticky sem re-disparo, falta de events de unlock facial/digital como o Xtend tinha).
+
+Vá até o fundo: OpenAPI Tuya, dump de DPs do device eba0b0f3d9b38977ed8b0a, engenharia reversa das referências MIT (ha-tuya-lock-monitor, tuya-smart-lock) e estudo do comportamento do xtend_tuya (sem copiar GPL). Implemente o máximo de estados/eventos acionáveis no HA (event platform + pulse/reset + timestamps/contadores), documente e bump de versão.

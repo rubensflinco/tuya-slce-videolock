@@ -45,23 +45,87 @@ Aparelho real em uso no Apto Bom Retiro (São Paulo). Use estes IDs ao depurar C
 - Binary: `deadbolt_reverse_lock`, `doorbell`, `duress_hijack_alert`, `normally_open_mode`, `online`
 - Sensors: `battery`, `app_unlocks`, `last_alarm`, `last_card_unlock`, `last_contact`, `last_fingerprint_unlock`, `last_password_unlock`, `pending_unlock_requests`, `temporary_code_unlocks`
 
+## Entidades slce_videolock (v0.5.0+) — integração unificada
+
+Todas as entidades num único device. **Recomendado**: remover Xtend/SmartLock/LockMonitor após configurar esta integração.
+
+### Lock
+- `lock.fechadura_inteligente_sl_ce_wi_fi` — **destranca de verdade** (Cloud ticket)
+
+### Camera
+- `camera.fechadura_inteligente_sl_ce_wi_fi` — stream RTSP/HLS via Tuya Cloud
+
+### Binary Sensors (com auto-reset para valores sticky)
+- `binary_sensor.*_online` — conectividade
+- `binary_sensor.*_campainha` — ON por 2s depois auto-reset
+- `binary_sensor.*_alerta_de_coacao` — hijack/duress, auto-reset
+- `binary_sensor.*_porta_destrancada` — estado do motor
+
+### Sensors
+- `sensor.*_bateria` — % bateria
+- `sensor.*_ultima_digital` — último unlock_fingerprint
+- `sensor.*_ultima_senha` — último unlock_password
+- `sensor.*_ultimo_cartao` — último unlock_card
+- `sensor.*_ultimo_reconhecimento_facial` — último unlock_face
+- `sensor.*_ultima_chave_mecanica` — último unlock_key
+- `sensor.*_ultimo_desbloqueio_remoto` — último unlock_phone_remote
+- `sensor.*_ultima_senha_dinamica` — último unlock_dynamic
+- `sensor.*_aberturas_pelo_app` — contador unlock_app
+- `sensor.*_codigos_temporarios_usados` — contador unlock_temporary
+- `sensor.*_pedidos_de_abertura_pendentes` — unlock_request
+- `sensor.*_ultimo_alarme` — último alarm_lock
+- `sensor.*_total_de_toques_campainha` — contador (incrementa em cada toque)
+- `sensor.*_total_de_alarmes` — contador
+- `sensor.*_total_de_desbloqueios` — contador
+- `sensor.*_ultima_campainha` — timestamp do último toque
+- `sensor.*_ultimo_alarme_hora` — timestamp do último alarme
+- `sensor.*_ultimo_desbloqueio_hora` — timestamp do último unlock
+
+### Events (plataforma event do HA — ideal para automações)
+- `event.*_campainha` — dispara `ring` a cada toque (não fica stuck)
+- `event.*_desbloqueio` — dispara tipo do método: `fingerprint`, `face`, `password`, `card`, `key`, etc.
+- `event.*_alarme` — dispara tipo do alarme: `wrong_finger`, `wrong_password`, `pry`, `duress`, etc.
+
 ## DPs / códigos Cloud típicos (videolock / ms)
 
 Baseado em logs Tuya + entidades Xtend/Monitor. Confirmar no IoT Platform → Debug Device / diagnostics HA.
 
-| Código / DP (nome) | Uso |
-|--------------------|-----|
-| `residual_electricity` | Bateria % |
-| `doorbell` | Campainha |
-| `hijack` / duress | Alerta coação |
-| `alarm_lock` | Alarme |
-| `unlock_fingerprint`, `unlock_password`, `unlock_card`, `unlock_app`, `unlock_temporary`, `unlock_dynamic`, `unlock_face`, `unlock_key`, `unlock_phone_remote`, … | Eventos de abertura |
-| `unlock_request` | Pedido remoto pendente |
-| `lock_motor_state` / `lock_status` | Estado (nem sempre atualiza bem em Wi‑Fi auto-lock) |
-| Remote unlock | **Smart Lock Open Service** (ticket) — não é DP simples de switch |
+| Código / DP (nome) | Uso | Entidade HA (v0.5.0+) |
+|--------------------|-----|----------------------|
+| `residual_electricity` | Bateria % | `sensor.*_bateria` |
+| `doorbell` | Campainha (sticky, auto-reset 2s) | `binary_sensor.*_campainha` + `event.*_campainha` |
+| `hijack` | Alerta coação (sticky, auto-reset 2s) | `binary_sensor.*_alerta_de_coacao` + `event.*_alarme` |
+| `alarm_lock` | Alarme (wrong_finger, pry, etc.) | `sensor.*_ultimo_alarme` + `event.*_alarme` |
+| `unlock_fingerprint` | Desbloqueio por digital | `sensor.*_ultima_digital` + `event.*_desbloqueio` |
+| `unlock_password` | Desbloqueio por senha | `sensor.*_ultima_senha` + `event.*_desbloqueio` |
+| `unlock_card` | Desbloqueio por cartão | `sensor.*_ultimo_cartao` + `event.*_desbloqueio` |
+| `unlock_face` | Desbloqueio facial | `sensor.*_ultimo_reconhecimento_facial` + `event.*_desbloqueio` |
+| `unlock_key` | Chave mecânica | `sensor.*_ultima_chave_mecanica` + `event.*_desbloqueio` |
+| `unlock_app` | Desbloqueio pelo app (contador) | `sensor.*_aberturas_pelo_app` |
+| `unlock_temporary` | Senha temporária (contador) | `sensor.*_codigos_temporarios_usados` |
+| `unlock_dynamic` | Senha dinâmica | `sensor.*_ultima_senha_dinamica` + `event.*_desbloqueio` |
+| `unlock_phone_remote` | Desbloqueio remoto celular | `sensor.*_ultimo_desbloqueio_remoto` + `event.*_desbloqueio` |
+| `unlock_request` | Pedido remoto pendente | `sensor.*_pedidos_de_abertura_pendentes` |
+| `lock_motor_state` | Estado motor (True=destravado) | `binary_sensor.*_porta_destrancada` |
+| Remote unlock | **Smart Lock Open Service** (ticket) | `lock.*` (unlock/lock) |
+
+### Endpoints de logs usados (v0.5.0+)
+
+| Endpoint | Uso |
+|----------|-----|
+| `/v1.0/devices/{id}/door-lock/open-logs` | Histórico de desbloqueios com timestamp |
+| `/v1.0/devices/{id}/door-lock/alarm-logs` | Histórico de alarmes com timestamp |
+| `/v1.0/devices/{id}/door-lock/records` | Registros combinados (unlock + alarm) — preferido para videolock |
 
 Docs oficiais Tuya (video lock DPs):  
 https://developer.tuya.com/en/docs/iot/intercom-door-lock?id=Kaxg4x1dt7a6j
+
+### Comportamento de polling (v0.5.0+)
+
+- **Intervalo**: 15 segundos (antes era 60s)
+- **Auto-reset**: `doorbell` e `hijack` resetam para OFF após 2s (evita stuck)
+- **Detecção de eventos**: Compara status anterior + busca logs para disparar `event.*`
+- **Contadores**: Incrementam mesmo se o valor do DP não mudar (útil para wrong_finger repetido)
 
 ## Credenciais necessárias (Cloud)
 

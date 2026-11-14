@@ -18,6 +18,7 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    ALARM_LOGS_ENDPOINT,
     API_REGIONS,
     DEFAULT_REGION,
     DEVICE_ENDPOINT,
@@ -25,6 +26,9 @@ from .const import (
     DP_AUTO_LOCK_TIME,
     DP_AUTOMATIC_LOCK,
     DP_LOCK_MOTOR_STATE,
+    LOG_PAGE_SIZE,
+    OPEN_LOGS_ENDPOINT,
+    RECORDS_ENDPOINT,
     REMOTE_UNLOCKS_ENDPOINT,
     STATUS_ENDPOINT,
     STREAM_ALLOCATE_ENDPOINT,
@@ -510,3 +514,193 @@ class TuyaCloudApi:
             # 10 minutes — user needs to subscribe the API, not retry.
             self._stream_fail_cache[cache_key] = (time.time() + 600.0, last_err)
         return None, None, last_err
+
+    async def async_get_unlock_logs(
+        self,
+        device_id: str,
+        page_no: int = 1,
+        page_size: int = LOG_PAGE_SIZE,
+        start_time: int = 0,
+        end_time: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Fetch unlock history logs from Tuya Cloud.
+
+        Returns list of log entries with: update_time, status (code, value),
+        unlock_name, user_id, nick_name.
+        """
+        now_ms = int(time.time() * 1000)
+        if end_time == 0:
+            end_time = now_ms
+        if start_time == 0:
+            # Last 24 hours by default
+            start_time = now_ms - (24 * 60 * 60 * 1000)
+
+        path = (
+            f"{OPEN_LOGS_ENDPOINT.format(device_id=device_id)}"
+            f"?page_no={page_no}&page_size={page_size}"
+            f"&start_time={start_time}&end_time={end_time}"
+        )
+        resp = await self._request("GET", path)
+        if not resp.get("success"):
+            _LOGGER.debug(
+                "Unlock logs failed for %s: %s",
+                device_id,
+                resp.get("msg"),
+            )
+            return []
+        result = resp.get("result") or {}
+        logs = result.get("logs") if isinstance(result, dict) else []
+        return logs if isinstance(logs, list) else []
+
+    async def async_get_alarm_logs(
+        self,
+        device_id: str,
+        page_no: int = 1,
+        page_size: int = LOG_PAGE_SIZE,
+        start_time: int = 0,
+        end_time: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Fetch alarm history logs from Tuya Cloud.
+
+        Returns list of alarm entries with: update_time, alarm_type, etc.
+        """
+        now_ms = int(time.time() * 1000)
+        if end_time == 0:
+            end_time = now_ms
+        if start_time == 0:
+            start_time = now_ms - (24 * 60 * 60 * 1000)
+
+        path = (
+            f"{ALARM_LOGS_ENDPOINT.format(device_id=device_id)}"
+            f"?page_no={page_no}&page_size={page_size}"
+            f"&start_time={start_time}&end_time={end_time}"
+        )
+        resp = await self._request("GET", path)
+        if not resp.get("success"):
+            _LOGGER.debug(
+                "Alarm logs failed for %s: %s",
+                device_id,
+                resp.get("msg"),
+            )
+            return []
+        result = resp.get("result") or {}
+        logs = result.get("logs") if isinstance(result, dict) else []
+        return logs if isinstance(logs, list) else []
+
+    async def async_get_records(
+        self,
+        device_id: str,
+        dp_codes: str = "unlock_fingerprint,unlock_password,unlock_card,unlock_face,alarm_lock,doorbell",
+        page_no: int = 1,
+        page_size: int = LOG_PAGE_SIZE,
+        start_time: int = 0,
+        end_time: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Fetch combined alert + unlock records (Wi-Fi access control).
+
+        This endpoint is better for videolock as it returns both unlock and
+        alarm records with timestamps and record_type.
+        """
+        now_ms = int(time.time() * 1000)
+        if end_time == 0:
+            end_time = now_ms
+        if start_time == 0:
+            start_time = now_ms - (24 * 60 * 60 * 1000)
+
+        path = (
+            f"{RECORDS_ENDPOINT.format(device_id=device_id)}"
+            f"?target_standard_dp_codes={dp_codes}"
+            f"&start_time={start_time}&end_time={end_time}"
+            f"&page_no={page_no}&page_size={page_size}"
+        )
+        resp = await self._request("GET", path)
+        if not resp.get("success"):
+            _LOGGER.debug(
+                "Records failed for %s: %s (%s)",
+                device_id,
+                resp.get("msg"),
+                resp.get("code"),
+            )
+            return []
+        result = resp.get("result") or {}
+        records = result.get("records") if isinstance(result, dict) else []
+        return records if isinstance(records, list) else []
+
+    async def async_get_latest_events(
+        self,
+        device_id: str,
+        since_timestamp: int = 0,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Get unlock and alarm events since a timestamp.
+
+        Returns (unlock_events, alarm_events) as separate lists.
+        Each event has at minimum: timestamp_ms, event_type, details.
+        """
+        now_ms = int(time.time() * 1000)
+        if since_timestamp == 0:
+            # Last 5 minutes for initial load
+            since_timestamp = now_ms - (5 * 60 * 1000)
+
+        unlock_events: list[dict[str, Any]] = []
+        alarm_events: list[dict[str, Any]] = []
+
+        # Try combined records endpoint first (better for videolock)
+        records = await self.async_get_records(
+            device_id,
+            start_time=since_timestamp,
+            end_time=now_ms,
+        )
+        for record in records:
+            ts = record.get("gmt_create") or record.get("update_time") or 0
+            if ts <= since_timestamp:
+                continue
+            record_type = record.get("record_type", "normal")
+            dps = record.get("dps") or []
+            event = {
+                "timestamp_ms": ts,
+                "record_type": record_type,
+                "user_id": record.get("user_id"),
+                "user_name": record.get("user_name"),
+                "unlock_name": record.get("unlock_name"),
+                "dps": dps,
+            }
+            if record_type == "alarm":
+                alarm_events.append(event)
+            else:
+                unlock_events.append(event)
+
+        # If records endpoint returned nothing, try legacy endpoints
+        if not unlock_events and not alarm_events:
+            unlock_logs = await self.async_get_unlock_logs(
+                device_id, start_time=since_timestamp, end_time=now_ms
+            )
+            for log in unlock_logs:
+                ts = log.get("update_time") or 0
+                if ts <= since_timestamp:
+                    continue
+                status = log.get("status") or {}
+                unlock_events.append({
+                    "timestamp_ms": ts,
+                    "record_type": "normal",
+                    "unlock_code": status.get("code"),
+                    "unlock_value": status.get("value"),
+                    "unlock_name": log.get("unlock_name"),
+                    "user_id": log.get("user_id"),
+                    "user_name": log.get("nick_name"),
+                })
+
+            alarm_logs = await self.async_get_alarm_logs(
+                device_id, start_time=since_timestamp, end_time=now_ms
+            )
+            for log in alarm_logs:
+                ts = log.get("update_time") or 0
+                if ts <= since_timestamp:
+                    continue
+                alarm_events.append({
+                    "timestamp_ms": ts,
+                    "record_type": "alarm",
+                    "alarm_type": log.get("alarm_type"),
+                    "details": log,
+                })
+
+        return unlock_events, alarm_events

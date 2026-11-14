@@ -17,7 +17,17 @@ DEFAULT_REGION = "us"
 # Official HA Tuya uses RTSP; Tuya HLS often expires / breaks HA stream worker
 DEFAULT_STREAM_TYPE = "rtsp"
 DEFAULT_AUTO_LOCK_DELAY = 3
-UPDATE_INTERVAL_SECONDS = 60
+
+# Polling: more aggressive to catch transient events (doorbell, alarms)
+# Cloud rate limit is ~1 req/s per device; 15s is safe and catches most pulses
+UPDATE_INTERVAL_SECONDS = 15
+
+# Auto-reset delay for sticky binary sensors (doorbell, hijack)
+# ha-tuya-lock-monitor uses 1s; we use 2s for safety margin
+PULSE_RESET_SECONDS = 2.0
+
+# How many recent log entries to fetch per poll (to detect new events)
+LOG_PAGE_SIZE = 10
 
 # OpenAPI hosts (Smart Home cloud projects)
 # Platform codes AY/AZ map to CN/US data centers (see platform.tuya.com ?region=)
@@ -56,6 +66,13 @@ DEVICE_ENDPOINT = "/v1.0/devices/{device_id}"
 STREAM_ALLOCATE_ENDPOINT = "/v1.0/devices/{device_id}/stream/actions/allocate"
 REMOTE_UNLOCKS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/remote-unlocks"
 
+# Lock event logs endpoints (Tuya Cloud API)
+# See: https://developer.tuya.com/en/docs/cloud/doorlock-api-record
+OPEN_LOGS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/open-logs"
+ALARM_LOGS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/alarm-logs"
+# Combined records endpoint (Wi-Fi access control devices)
+RECORDS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/records"
+
 # Preferred stream order for HA ffmpeg (docs: developer.tuya.com IoT Video Live Stream)
 # Order used after the config preferred type (docs/camera-todo.md)
 STREAM_TYPE_PREFERENCE: tuple[str, ...] = ("rtsp", "hls")
@@ -89,6 +106,57 @@ DP_ALARM_LOCK = "alarm_lock"
 DP_AUTO_LOCK_TIME = "auto_lock_time"
 DP_AUTOMATIC_LOCK = "automatic_lock"
 DP_LOCK_MOTOR_STATE = "lock_motor_state"
+
+# Additional unlock method DPs (videolock / SL-CE)
+DP_UNLOCK_FACE = "unlock_face"
+DP_UNLOCK_KEY = "unlock_key"
+DP_UNLOCK_DYNAMIC = "unlock_dynamic"
+DP_UNLOCK_PHONE_REMOTE = "unlock_phone_remote"
+DP_UNLOCK_FINGER_VEIN = "unlock_finger_vein"
+DP_UNLOCK_HAND = "unlock_hand"
+DP_UNLOCK_VOICE = "unlock_voice"
+DP_UNLOCK_OFFLINE_PASSWORD = "unlock_offline_password"
+DP_UNLOCK_IDENTITY_CARD = "unlock_identity_card"
+DP_UNLOCK_EMERGENCY = "unlock_emergency"
+
+# All unlock DP codes for event detection
+ALL_UNLOCK_DPS: tuple[str, ...] = (
+    DP_UNLOCK_FINGERPRINT,
+    DP_UNLOCK_PASSWORD,
+    DP_UNLOCK_CARD,
+    DP_UNLOCK_APP,
+    DP_UNLOCK_TEMPORARY,
+    DP_UNLOCK_FACE,
+    DP_UNLOCK_KEY,
+    DP_UNLOCK_DYNAMIC,
+    DP_UNLOCK_PHONE_REMOTE,
+    DP_UNLOCK_FINGER_VEIN,
+    DP_UNLOCK_HAND,
+    DP_UNLOCK_VOICE,
+    DP_UNLOCK_OFFLINE_PASSWORD,
+    DP_UNLOCK_IDENTITY_CARD,
+    DP_UNLOCK_EMERGENCY,
+)
+
+# Event types for HA event platform
+EVENT_TYPE_DOORBELL = "ring"
+EVENT_TYPE_ALARM = "alarm"
+EVENT_TYPE_HIJACK = "duress"
+EVENT_TYPE_UNLOCK = "unlock"
+
+# Alarm types (from alarm_lock DP values)
+ALARM_TYPES: tuple[str, ...] = (
+    "wrong_finger",
+    "wrong_password",
+    "wrong_card",
+    "wrong_face",
+    "pry",
+    "low_battery",
+    "lock_stuck",
+    "multiple_failures",
+    "tamper",
+    "forced_open",
+)
 
 MANUFACTURER = "Novadigital / Tuya"
 MODEL = "SL-CE Elegance (videolock)"
