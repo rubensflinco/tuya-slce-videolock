@@ -81,8 +81,18 @@ async def async_allocate_via_sharing(
             if manager is None or not hasattr(
                 manager, "get_device_stream_allocate"
             ):
+                _LOGGER.debug(
+                    "No Sharing manager with allocate on %s entry %s",
+                    domain,
+                    entry.entry_id,
+                )
                 continue
             if not _device_known(manager, device_id):
+                _LOGGER.warning(
+                    "Device %s not in %s Sharing device_map — cannot reuse stream",
+                    device_id,
+                    domain,
+                )
                 continue
 
             try:
@@ -92,7 +102,7 @@ async def async_allocate_via_sharing(
                     stype,
                 )
             except Exception as err:  # noqa: BLE001
-                _LOGGER.debug(
+                _LOGGER.warning(
                     "Sharing allocate via %s failed for %s (%s): %s",
                     domain,
                     device_id,
@@ -109,5 +119,12 @@ async def async_allocate_via_sharing(
                     stype,
                 )
                 return str(url), f"{domain}/sharing/{stype}"
+
+            _LOGGER.warning(
+                "Sharing allocate via %s returned empty for %s (%s)",
+                domain,
+                device_id,
+                stype,
+            )
 
     return None, None
