@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SL-CE Videolock",
+        "description": "Tuya IoT Access ID/Secret + Device ID. Device RuGiu padrão: {device_hint}",
+        "data": {
+          "access_id": "Access ID",
+          "access_secret": "Access Secret",
+          "device_id": "Device ID",
+          "region": "Region (AY/AZ/EU/US…)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Este Device ID já está configurado"
+    },
+    "error": {
+      "cannot_connect": "Falha ao validar na Cloud Tuya",
+      "invalid_auth": "Access ID/Secret inválidos"
+    }
+  }
+}

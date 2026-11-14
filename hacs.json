@@ -1,0 +1,7 @@
+{
+  "name": "SL-CE Videolock",
+  "filename": "slce_videolock.zip",
+  "render_readme": true,
+  "country": "BR",
+  "homeassistant": "2024.8.0"
+}

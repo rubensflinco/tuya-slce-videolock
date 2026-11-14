@@ -1,0 +1,13 @@
+{
+  "domain": "slce_videolock",
+  "name": "SL-CE Videolock",
+  "codeowners": ["@rubensflinco"],
+  "config_flow": true,
+  "documentation": "https://github.com/rubensflinco/slce-videolock",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/rubensflinco/slce-videolock/issues",
+  "loggers": ["custom_components.slce_videolock"],
+  "requirements": [],
+  "version": "0.1.0"
+}
