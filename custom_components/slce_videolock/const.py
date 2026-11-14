@@ -47,7 +47,8 @@ TICKET_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/password-ticket"
 DOOR_OPERATE_ENDPOINT = (
     "/v1.0/smart-lock/devices/{device_id}/password-free/door-operate"
 )
-STATUS_ENDPOINT = "/v1.0/devices/{device_id}/status"
+# Same path as tuya-smart-lock (IoT Core status); /v1.0/devices/.../status often fails
+STATUS_ENDPOINT = "/v1.0/iot-03/devices/{device_id}/status"
 DEVICE_ENDPOINT = "/v1.0/devices/{device_id}"
 STREAM_ALLOCATE_ENDPOINT = "/v1.0/devices/{device_id}/stream/actions/allocate"
 REMOTE_UNLOCKS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/remote-unlocks"

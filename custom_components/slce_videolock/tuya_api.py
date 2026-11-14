@@ -351,16 +351,27 @@ class TuyaCloudApi:
             return None
 
     async def async_get_status(self, device_id: str) -> dict[str, Any]:
-        """Return DP code→value map."""
-        resp = await self._request("GET", STATUS_ENDPOINT.format(device_id=device_id))
-        if not resp.get("success"):
-            raise TuyaApiError(
-                f"Status error: {resp.get('msg')}",
-                code=resp.get("code"),
-            )
-        raw = resp.get("result")
-        if isinstance(raw, list):
-            return parse_status_list(raw)
+        """Return DP code→value map (empty dict on soft Cloud failures)."""
+        paths = (
+            STATUS_ENDPOINT.format(device_id=device_id),
+            f"/v1.0/devices/{device_id}/status",
+        )
+        last_err: str | None = None
+        for path in paths:
+            resp = await self._request("GET", path)
+            if not resp.get("success"):
+                last_err = f"{resp.get('msg')} ({resp.get('code')})"
+                _LOGGER.debug("Status via %s failed: %s", path, last_err)
+                continue
+            raw = resp.get("result")
+            if isinstance(raw, list):
+                return parse_status_list(raw)
+            return {}
+        _LOGGER.warning(
+            "Could not read status for %s — continuing with empty DPs: %s",
+            device_id,
+            last_err,
+        )
         return {}
 
     async def async_get_auto_lock_time(self, device_id: str) -> int | None:

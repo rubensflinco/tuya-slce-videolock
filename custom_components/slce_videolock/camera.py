@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.camera import CameraEntity, CameraEntityFeature
+from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -36,13 +36,13 @@ async def async_setup_entry(
     async_add_entities([SlceVideolockCamera(coordinator, api, device_id, preferred)])
 
 
-class SlceVideolockCamera(
-    CoordinatorEntity[SlceVideolockCoordinator], CameraEntity
-):
+class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
     """Videolock camera via Cloud stream allocate.
 
     On each stream start / snapshot, allocates a fresh signed URL from Tuya
     (URLs expire). Prefer HLS for Home Assistant ffmpeg; fall back to RTSP.
+
+    HA Core exposes ``Camera`` (not ``CameraEntity``) on current releases.
     """
 
     _attr_has_entity_name = True
@@ -57,7 +57,7 @@ class SlceVideolockCamera(
         preferred_stream: str,
     ) -> None:
         super().__init__(coordinator)
-        CameraEntity.__init__(self)
+        Camera.__init__(self)
         self._api = api
         self._device_id = device_id
         self._preferred_stream = (preferred_stream or DEFAULT_STREAM_TYPE).lower()
