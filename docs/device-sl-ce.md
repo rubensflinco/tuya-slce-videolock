@@ -67,7 +67,7 @@ https://developer.tuya.com/en/docs/iot/intercom-door-lock?id=Kaxg4x1dt7a6j
 
 Mesmo padrão do Tuya Smart Lock:
 
-1. Projeto em [iot.tuya.com](https://iot.tuya.com)  
+1. Projeto em [platform.tuya.com](https://platform.tuya.com/)  
 2. APIs: **IoT Core** + **Smart Lock Open Service** (renovar trial ~6 meses)  
 3. Access ID / Access Secret  
 4. Device ID `eba0b0f3d9b38977ed8b0a` vinculado à conta Smart Life  

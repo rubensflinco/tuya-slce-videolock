@@ -22,7 +22,7 @@ A integração oficial Tuya **não** expõe `lock`. Três addons cobrem pedaços
 
 ## Pré-requisitos (Tuya IoT)
 
-1. Conta em [iot.tuya.com](https://iot.tuya.com) → projeto **Cloud** (método Smart Home)
+1. Conta em [platform.tuya.com](https://platform.tuya.com/) → projeto **Cloud** (método Smart Home)
 2. Vincular a conta **Smart Life / Tuya** (QR) para o device aparecer
 3. Autorizar serviços:
    - **IoT Core**

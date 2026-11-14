@@ -14,7 +14,7 @@ A entidade `camera` chama:
 
 Docs Tuya: [IoT Video Live Stream](https://developer.tuya.com/en/docs/cloud/iot-video-live-stream?id=Kaiuybxmi136f)
 
-## Pré-requisito no iot.tuya.com (igual Xtend)
+## Pré-requisito no platform.tuya.com (igual Xtend)
 
 1. Cloud → Cloud Services  
 2. Ativar trial **IoT Video Live Stream**  
@@ -56,7 +56,7 @@ Causa: o projeto Cloud das credenciais **não tem** o serviço **IoT Video Live 
 
 Correção (igual [Xtend configure_cameras](https://github.com/azerty9971/xtend_tuya/blob/main/docs/configure_cameras.md)):
 
-1. [iot.tuya.com](https://iot.tuya.com) → **Cloud → Cloud Services** (ou Service API no projeto)
+1. [platform.tuya.com](https://platform.tuya.com/) → **Cloud → Cloud Services** (ou Service API no projeto)
 2. Linha **IoT Video Live Stream** → **Free Trial** / Authorize
 3. Confirmar status ativo
 4. No HA: reabrir a entidade câmera (ou recarregar a integração)
