@@ -40,14 +40,20 @@ Ir até o fundo (docs Tuya, OpenAPI, debug device, engenharia reversa de pacotes
 - Polling Cloud: reduzir latência **ou** (melhor) canal push/MQTT/message do Tuya se existir para videolock  
 - Auto-reset / pulse onde o cloud for sticky (padrão `ha-tuya-lock-monitor`)  
 - Documentar DPs mapeados em `docs/device-sl-ce.md`  
-- ✅ Bump de versão: `manifest.json` → v0.5.1
+- ✅ Bump de versão: `manifest.json` → v0.5.2
 
-**Status:** ✅ Implementado em v0.5.0 · hotfix sticky doorbell em **v0.5.1**
+**Status:** ✅ Implementado em v0.5.0 · hotfixes **v0.5.1** / **v0.5.2**
 
 ### Hotfix v0.5.1 (2026-11-14)
 
 Cloud deixa `doorbell=true` sticky. Em 0.5.0 o coordinator re-disparava `event.*_campainha` a cada poll (~15s) por um cooldown de 5s.  
 **Correção:** armar só quando cloud volta a `false`; um único `ring` por sessão sticky; no bootstrap pós-reload não dispara se já estiver `true`.
+
+### Hotfix v0.5.2 (2026-11-14)
+
+Status sticky impede detectar novo toque / mesmo facial (`unlock_face=2`).  
+`door-lock/records` falhava com `sign invalid` (query params fora de ordem alfabética).  
+**Correção:** assinatura com query ordenada; campainha/unlock/alarme via records; entidades `event` registradas antes do poll.
 
 ## Referências (já no repo / conhecidas)
 

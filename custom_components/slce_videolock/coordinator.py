@@ -170,20 +170,22 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._fire_event("alarm_event", alarm_type, {"alarm_type": alarm_val})
             _LOGGER.warning("Alarm event: %s", alarm_val)
 
-        # Unlock DPs: detect any change
-        for dp_code in ALL_UNLOCK_DPS:
-            new_val = new_status.get(dp_code)
-            old_val = old_status.get(dp_code)
-            if new_val is not None and new_val != old_val:
-                self._last_unlock_ts = now_ms
-                self._event_counts["unlock"] += 1
-                method = _extract_unlock_method(dp_code)
-                self._fire_event(
-                    "unlock_event",
-                    method,
-                    {"method": method, "value": new_val, "dp_code": dp_code},
-                )
-                _LOGGER.info("Unlock event: %s = %s", dp_code, new_val)
+        # Unlock DPs: only real changes after baseline (skip bootstrap).
+        # Same face/fingerprint ID stays sticky — records API is the source of truth.
+        if old_status:
+            for dp_code in ALL_UNLOCK_DPS:
+                new_val = new_status.get(dp_code)
+                old_val = old_status.get(dp_code)
+                if new_val is not None and new_val != old_val:
+                    self._last_unlock_ts = now_ms
+                    self._event_counts["unlock"] += 1
+                    method = _extract_unlock_method(dp_code)
+                    self._fire_event(
+                        "unlock_event",
+                        method,
+                        {"method": method, "value": new_val, "dp_code": dp_code},
+                    )
+                    _LOGGER.info("Unlock event: %s = %s", dp_code, new_val)
 
     @callback
     def _fire_event(
@@ -204,15 +206,27 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
     async def _fetch_and_process_logs(self) -> None:
-        """Fetch recent logs and fire events for new entries."""
+        """Fetch recent logs and fire events for new entries.
+
+        Cloud status DPs for doorbell/unlock_face are sticky — door-lock/records
+        is the reliable source (requires alphabetically sorted query for HMAC).
+        """
+        if not self._event_entities:
+            # Platforms not ready yet — don't advance cursor past real events.
+            return
+
+        now_ms = int(time.time() * 1000)
         if self._last_event_timestamp_ms == 0:
-            # First run: set to now - 1 minute to avoid flooding
-            self._last_event_timestamp_ms = int(time.time() * 1000) - 60000
+            # Bootstrap: cursor = now so we don't replay hours of history.
+            self._last_event_timestamp_ms = now_ms
+            return
 
         try:
-            unlock_events, alarm_events = await self.api.async_get_latest_events(
-                self.device_id,
-                since_timestamp=self._last_event_timestamp_ms,
+            unlock_events, alarm_events, doorbell_events = (
+                await self.api.async_get_latest_events(
+                    self.device_id,
+                    since_timestamp=self._last_event_timestamp_ms,
+                )
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed to fetch event logs: %s", err)
@@ -220,26 +234,39 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         max_ts = self._last_event_timestamp_ms
 
-        # Process unlock events from logs
+        for event in doorbell_events:
+            ts = int(event.get("timestamp_ms") or 0)
+            if ts > max_ts:
+                max_ts = ts
+            self._last_doorbell_ts = ts or now_ms
+            self._event_counts["doorbell"] += 1
+            self._doorbell_armed = False
+            self._fire_event("doorbell_event", EVENT_TYPE_DOORBELL, {
+                "timestamp": ts,
+                "record_id": event.get("record_id"),
+            })
+            self._schedule_pulse_reset(DP_DOORBELL)
+            _LOGGER.info("Doorbell event from records (ts=%s)", ts)
+
         for event in unlock_events:
-            ts = event.get("timestamp_ms", 0)
+            ts = int(event.get("timestamp_ms") or 0)
             if ts > max_ts:
                 max_ts = ts
 
-            # Extract unlock method from DPs or unlock_code
             method = "unknown"
             dps = event.get("dps") or []
             for dp in dps:
                 if isinstance(dp, dict):
                     for key in dp:
-                        if key.startswith("unlock_"):
-                            method = _extract_unlock_method(key)
+                        if str(key).startswith("unlock_"):
+                            method = _extract_unlock_method(str(key))
                             break
             if method == "unknown":
                 code = event.get("unlock_code") or ""
-                if code.startswith("unlock_"):
-                    method = _extract_unlock_method(code)
+                if str(code).startswith("unlock_"):
+                    method = _extract_unlock_method(str(code))
 
+            self._last_unlock_ts = ts or now_ms
             self._event_counts["unlock"] += 1
             self._fire_event(
                 "unlock_event",
@@ -249,17 +276,19 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "user_name": event.get("user_name"),
                     "unlock_name": event.get("unlock_name"),
                     "timestamp": ts,
+                    "record_id": event.get("record_id"),
                 },
             )
+            _LOGGER.info("Unlock event from records: %s (ts=%s)", method, ts)
 
-        # Process alarm events from logs
         for event in alarm_events:
-            ts = event.get("timestamp_ms", 0)
+            ts = int(event.get("timestamp_ms") or 0)
             if ts > max_ts:
                 max_ts = ts
 
             alarm_type = event.get("alarm_type") or EVENT_TYPE_ALARM
             alarm_type = str(alarm_type).lower().replace(" ", "_")
+            self._last_alarm_ts = ts or now_ms
             self._event_counts["alarm"] += 1
             self._fire_event(
                 "alarm_event",
@@ -268,6 +297,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "alarm_type": alarm_type,
                     "timestamp": ts,
                     "details": event.get("details"),
+                    "record_id": event.get("record_id"),
                 },
             )
 

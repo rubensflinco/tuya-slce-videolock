@@ -102,9 +102,6 @@ async def async_setup_entry(
     ]
     async_add_entities(entities)
 
-    # Register entities with coordinator for event dispatching
-    coordinator.register_event_entities(entities)
-
 
 class SlceEventEntity(EventEntity):
     """Event entity for momentary lock events (doorbell, unlock, alarm)."""
@@ -126,6 +123,11 @@ class SlceEventEntity(EventEntity):
         self._attr_event_types = description.event_types_list
         name = coordinator.data.get("name") if coordinator.data else None
         self._attr_device_info = build_device_info(device_id, name)
+
+    async def async_added_to_hass(self) -> None:
+        """Register with coordinator once HA entity is ready."""
+        await super().async_added_to_hass()
+        self._coordinator.register_event_entities([self])
 
     @callback
     def fire_event(

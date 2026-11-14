@@ -42,7 +42,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     device_id = entry.data[CONF_DEVICE_ID]
     coordinator = SlceVideolockCoordinator(hass, api, device_id)
-    await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
@@ -51,7 +50,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "device_id": device_id,
     }
 
+    # Platforms (incl. event entities) before first refresh so log→event works.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await coordinator.async_config_entry_first_refresh()
     return True
 
 
