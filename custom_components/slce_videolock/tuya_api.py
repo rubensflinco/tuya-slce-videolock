@@ -8,6 +8,7 @@ behaviour observed in the ecosystem; no GPL code is copied.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -19,13 +20,21 @@ import aiohttp
 
 from .const import (
     ALARM_LOGS_ENDPOINT,
+    ALARM_LOGS_V11_ENDPOINT,
     API_REGIONS,
     DEFAULT_REGION,
     DEVICE_ENDPOINT,
+    DEVICE_LOGS_ENDPOINT,
     DOOR_OPERATE_ENDPOINT,
+    DP_ALARM_LOCK,
+    DP_ALARM_REMINDER,
     DP_AUTO_LOCK_TIME,
     DP_AUTOMATIC_LOCK,
+    DP_DOORBELL,
+    DP_HIJACK,
+    DP_INITIATIVE_MESSAGE,
     DP_LOCK_MOTOR_STATE,
+    INITIATIVE_EXT_TYPE_MAP,
     LOG_PAGE_SIZE,
     OPEN_LOGS_ENDPOINT,
     RECORDS_ENDPOINT,
@@ -137,6 +146,42 @@ def _dp_keys(dps: list[Any]) -> set[str]:
         if isinstance(item, dict):
             keys.update(str(k) for k in item)
     return keys
+
+
+def parse_initiative_message(value: Any) -> dict[str, Any] | None:
+    """Decode initiative_message raw/base64 JSON from videolock media push."""
+    if value is None or value == "":
+        return None
+    raw = value
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", "replace")
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    try:
+        if not text.startswith("{"):
+            text = base64.b64decode(text).decode("utf-8", "replace")
+        data = json.loads(text)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def initiative_to_alarm_type(payload: dict[str, Any]) -> str | None:
+    """Map initiative_message payload to an alarm event type, or None to skip."""
+    if not payload.get("alarm"):
+        return None
+    ext = payload.get("ext") if isinstance(payload.get("ext"), dict) else {}
+    try:
+        ext_type = int(ext.get("type"))
+    except (TypeError, ValueError):
+        return "alarm"
+    mapped = INITIATIVE_EXT_TYPE_MAP.get(ext_type)
+    if mapped == "doorbell":
+        return None  # doorbell handled via records
+    if mapped:
+        return mapped
+    return "alarm"
 
 
 def infer_is_locked(status: dict[str, Any]) -> bool | None:
@@ -583,10 +628,13 @@ class TuyaCloudApi:
         page_size: int = LOG_PAGE_SIZE,
         start_time: int = 0,
         end_time: int = 0,
+        codes: str = "alarm_lock,hijack",
     ) -> list[dict[str, Any]]:
-        """Fetch alarm history logs from Tuya Cloud.
+        """Fetch alarm history logs from Tuya Cloud (prefer v1.1).
 
-        Returns list of alarm entries with: update_time, alarm_type, etc.
+        Returns list of alarm entries with: update_time, status[], etc.
+        Note: on some videolocks `codes=alarm_lock` returns empty even when
+        status shows wrong_finger — use device logs / initiative_message too.
         """
         now_ms = int(time.time() * 1000)
         if end_time == 0:
@@ -594,21 +642,63 @@ class TuyaCloudApi:
         if start_time == 0:
             start_time = now_ms - (24 * 60 * 60 * 1000)
 
+        params = {
+            "codes": codes,
+            "end_time": end_time,
+            "page_no": page_no,
+            "page_size": page_size,
+            "start_time": start_time,
+        }
+        # v1.1 first (videolock); fall back to legacy v1.0
+        for endpoint in (ALARM_LOGS_V11_ENDPOINT, ALARM_LOGS_ENDPOINT):
+            path = build_signed_path(endpoint.format(device_id=device_id), params)
+            resp = await self._request("GET", path)
+            if not resp.get("success"):
+                _LOGGER.debug(
+                    "Alarm logs %s failed for %s: %s",
+                    endpoint,
+                    device_id,
+                    resp.get("msg"),
+                )
+                continue
+            result = resp.get("result") or {}
+            records = result.get("records") if isinstance(result, dict) else None
+            if isinstance(records, list):
+                return records
+            logs = result.get("logs") if isinstance(result, dict) else []
+            return logs if isinstance(logs, list) else []
+        return []
+
+    async def async_get_device_dp_logs(
+        self,
+        device_id: str,
+        start_time: int = 0,
+        end_time: int = 0,
+        size: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Fetch recent DP report logs (type=7), including sticky re-reports."""
+        now_ms = int(time.time() * 1000)
+        if end_time == 0:
+            end_time = now_ms
+        if start_time == 0:
+            start_time = now_ms - (60 * 60 * 1000)
+
         path = build_signed_path(
-            ALARM_LOGS_ENDPOINT.format(device_id=device_id),
+            DEVICE_LOGS_ENDPOINT.format(device_id=device_id),
             {
                 "end_time": end_time,
-                "page_no": page_no,
-                "page_size": page_size,
+                "size": size,
                 "start_time": start_time,
+                "type": 7,
             },
         )
         resp = await self._request("GET", path)
         if not resp.get("success"):
             _LOGGER.debug(
-                "Alarm logs failed for %s: %s",
+                "Device DP logs failed for %s: %s (%s)",
                 device_id,
                 resp.get("msg"),
+                resp.get("code"),
             )
             return []
         result = resp.get("result") or {}
@@ -709,8 +799,8 @@ class TuyaCloudApi:
             else:
                 unlock_events.append(event)
 
-        # Fallback: legacy open-logs if records empty
-        if not unlock_events and not alarm_events and not doorbell_events:
+        # Fallback: legacy open-logs if records empty for unlocks
+        if not unlock_events and not doorbell_events:
             unlock_logs = await self.async_get_unlock_logs(
                 device_id, start_time=since_timestamp, end_time=now_ms
             )
@@ -733,19 +823,101 @@ class TuyaCloudApi:
                     }
                 )
 
-            alarm_logs = await self.async_get_alarm_logs(
-                device_id, start_time=since_timestamp, end_time=now_ms
-            )
-            for log in alarm_logs:
-                ts = int(log.get("update_time") or 0)
-                if ts <= since_timestamp:
+        # Alarm via v1.1 alarm-logs (doorbell filtered out)
+        alarm_logs = await self.async_get_alarm_logs(
+            device_id, start_time=since_timestamp, end_time=now_ms
+        )
+        for log in alarm_logs:
+            ts = int(log.get("update_time") or 0)
+            if ts <= since_timestamp:
+                continue
+            status = log.get("status") or []
+            codes: list[dict[str, Any]] = []
+            if isinstance(status, list):
+                codes = [s for s in status if isinstance(s, dict)]
+            elif isinstance(status, dict):
+                codes = [status]
+            for item in codes:
+                code = str(item.get("code") or "")
+                if code == DP_DOORBELL:
                     continue
+                if code in (DP_ALARM_LOCK, DP_HIJACK) or code.startswith("wrong_"):
+                    alarm_type = (
+                        "duress"
+                        if code == DP_HIJACK
+                        else str(item.get("value") or code).lower().replace(" ", "_")
+                    )
+                    alarm_events.append(
+                        {
+                            "timestamp_ms": ts,
+                            "record_type": "alarm",
+                            "alarm_type": alarm_type,
+                            "details": log,
+                        }
+                    )
+
+        # Device DP report log (type=7): sticky re-reports + initiative_message
+        # Wrong-attempt lockouts often appear here as initiative_message (ext.type),
+        # NOT as alarm_lock in door-lock/records (Xtend #1079 / SL-CE).
+        dp_logs = await self.async_get_device_dp_logs(
+            device_id, start_time=since_timestamp, end_time=now_ms
+        )
+        for log in dp_logs:
+            ts = int(log.get("event_time") or 0)
+            if ts <= since_timestamp:
+                continue
+            code = str(log.get("code") or "")
+            value = log.get("value")
+
+            if code == DP_INITIATIVE_MESSAGE:
+                payload = parse_initiative_message(value)
+                if not payload:
+                    continue
+                alarm_type = initiative_to_alarm_type(payload)
+                if not alarm_type:
+                    continue
+                ext = payload.get("ext") if isinstance(payload.get("ext"), dict) else {}
                 alarm_events.append(
                     {
                         "timestamp_ms": ts,
                         "record_type": "alarm",
-                        "alarm_type": log.get("alarm_type"),
-                        "details": log,
+                        "alarm_type": alarm_type,
+                        "details": {
+                            "source": "initiative_message",
+                            "ext_type": ext.get("type"),
+                            "payload_time": payload.get("time"),
+                        },
+                    }
+                )
+            elif code == DP_ALARM_LOCK:
+                alarm_events.append(
+                    {
+                        "timestamp_ms": ts,
+                        "record_type": "alarm",
+                        "alarm_type": str(value or "alarm").lower().replace(" ", "_"),
+                        "details": {"source": "device_log", "code": code, "value": value},
+                    }
+                )
+            elif code == DP_ALARM_REMINDER:
+                # Same sticky int may re-report on each lockout (Xtend #1079)
+                alarm_events.append(
+                    {
+                        "timestamp_ms": ts,
+                        "record_type": "alarm",
+                        "alarm_type": "multiple_failures",
+                        "details": {
+                            "source": "alarm_reminder",
+                            "value": value,
+                        },
+                    }
+                )
+            elif code == DP_HIJACK and str(value).lower() in ("true", "1"):
+                alarm_events.append(
+                    {
+                        "timestamp_ms": ts,
+                        "record_type": "alarm",
+                        "alarm_type": "duress",
+                        "details": {"source": "device_log", "code": code},
                     }
                 )
 

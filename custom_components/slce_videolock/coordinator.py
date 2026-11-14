@@ -160,15 +160,17 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif hijack_val is False:
             self._hijack_armed = True
 
-        # Alarm: detect changes or same value with new timestamp
-        alarm_val = new_status.get(DP_ALARM_LOCK)
-        old_alarm = old_status.get(DP_ALARM_LOCK)
-        if alarm_val and alarm_val != old_alarm:
-            self._last_alarm_ts = now_ms
-            self._event_counts["alarm"] += 1
-            alarm_type = str(alarm_val).lower().replace(" ", "_")
-            self._fire_event("alarm_event", alarm_type, {"alarm_type": alarm_val})
-            _LOGGER.warning("Alarm event: %s", alarm_val)
+        # Alarm status DP is sticky (wrong_finger stays forever). Only fire on
+        # real value change after baseline; repeats come from device logs.
+        if old_status:
+            alarm_val = new_status.get(DP_ALARM_LOCK)
+            old_alarm = old_status.get(DP_ALARM_LOCK)
+            if alarm_val and alarm_val != old_alarm:
+                self._last_alarm_ts = now_ms
+                self._event_counts["alarm"] += 1
+                alarm_type = str(alarm_val).lower().replace(" ", "_")
+                self._fire_event("alarm_event", alarm_type, {"alarm_type": alarm_val})
+                _LOGGER.warning("Alarm event (status change): %s", alarm_val)
 
         # Unlock DPs: only real changes after baseline (skip bootstrap).
         # Same face/fingerprint ID stays sticky — records API is the source of truth.
@@ -286,8 +288,13 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if ts > max_ts:
                 max_ts = ts
 
-            alarm_type = event.get("alarm_type") or EVENT_TYPE_ALARM
-            alarm_type = str(alarm_type).lower().replace(" ", "_")
+            alarm_type = event.get("alarm_type")
+            if not alarm_type:
+                for dp in event.get("dps") or []:
+                    if isinstance(dp, dict) and DP_ALARM_LOCK in dp:
+                        alarm_type = dp.get(DP_ALARM_LOCK)
+                        break
+            alarm_type = str(alarm_type or EVENT_TYPE_ALARM).lower().replace(" ", "_")
             self._last_alarm_ts = ts or now_ms
             self._event_counts["alarm"] += 1
             self._fire_event(
@@ -299,6 +306,14 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "details": event.get("details"),
                     "record_id": event.get("record_id"),
                 },
+            )
+            _LOGGER.warning(
+                "Alarm event from logs: %s (ts=%s source=%s)",
+                alarm_type,
+                ts,
+                (event.get("details") or {}).get("source")
+                if isinstance(event.get("details"), dict)
+                else "records",
             )
 
         if max_ts > self._last_event_timestamp_ms:

@@ -72,6 +72,10 @@ OPEN_LOGS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/open-logs"
 ALARM_LOGS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/alarm-logs"
 # Combined records endpoint (Wi-Fi access control devices)
 RECORDS_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/records"
+# Device DP report log (type=7) — catches sticky re-reports (alarm / initiative_message)
+DEVICE_LOGS_ENDPOINT = "/v1.0/devices/{device_id}/logs"
+# alarm-logs v1.1 (videolock); v1.0 often returns param illegal
+ALARM_LOGS_V11_ENDPOINT = "/v1.1/devices/{device_id}/door-lock/alarm-logs"
 
 # Preferred stream order for HA ffmpeg (docs: developer.tuya.com IoT Video Live Stream)
 # Order used after the config preferred type (docs/camera-todo.md)
@@ -103,6 +107,8 @@ DP_UNLOCK_APP = "unlock_app"
 DP_UNLOCK_TEMPORARY = "unlock_temporary"
 DP_UNLOCK_REQUEST = "unlock_request"
 DP_ALARM_LOCK = "alarm_lock"
+DP_ALARM_REMINDER = "alarm_reminder"
+DP_INITIATIVE_MESSAGE = "initiative_message"
 DP_AUTO_LOCK_TIME = "auto_lock_time"
 DP_AUTOMATIC_LOCK = "automatic_lock"
 DP_LOCK_MOTOR_STATE = "lock_motor_state"
@@ -144,7 +150,7 @@ EVENT_TYPE_ALARM = "alarm"
 EVENT_TYPE_HIJACK = "duress"
 EVENT_TYPE_UNLOCK = "unlock"
 
-# Alarm types (from alarm_lock DP values)
+# Alarm types (from alarm_lock DP values + initiative_message ext.type)
 ALARM_TYPES: tuple[str, ...] = (
     "wrong_finger",
     "wrong_password",
@@ -156,7 +162,23 @@ ALARM_TYPES: tuple[str, ...] = (
     "multiple_failures",
     "tamper",
     "forced_open",
+    "tongue_bad",
+    "tongue_not_out",
+    "unclosed_time",
+    "key_in",
+    "too_hot",
+    "defense",
 )
+
+# initiative_message.ext.type → HA event type (videolock media push)
+# 18 = doorbell (handled via records). 4106 = lockout (Xtend #1079).
+# 4104 matches sticky alarm_reminder on SL-CE RuGiu.
+INITIATIVE_EXT_TYPE_MAP: dict[int, str] = {
+    18: "doorbell",
+    10: "multiple_failures",
+    4104: "wrong_finger",
+    4106: "multiple_failures",
+}
 
 MANUFACTURER = "Novadigital / Tuya"
 MODEL = "SL-CE Elegance (videolock)"
