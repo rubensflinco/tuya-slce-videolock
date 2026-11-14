@@ -1,34 +1,30 @@
-# Câmera SL-CE — próximos passos (MVP stub)
+# Câmera SL-CE — stream Cloud
 
-## Estado atual
+## Estado (v0.3.0+)
 
-A entidade `camera.*` é registrada no **mesmo** device da fechadura, mas **não** entrega snapshot/stream ainda.
+A entidade `camera` chama:
 
-## Por que não copiar o Xtend Tuya
+`POST /v1.0/devices/{device_id}/stream/actions/allocate` com `type` em `rtsp` → `hls` → `flv` → `rtmp`
 
-[azerty9971/xtend_tuya](https://github.com/azerty9971/xtend_tuya) prova que o stream da SL-CE funciona (WebRTC / IPC via Sharing + IoT SDK). Porém o projeto é **GPL-3.0** — incompatível com cópia direta para esta integração MIT.
+É o **mesmo endpoint OpenAPI** documentado pela Tuya e usado no caminho IoT do [Xtend Tuya](https://github.com/azerty9971/xtend_tuya) (`get_device_stream_allocate`). Código desta integração é **MIT próprio** (sem copiar GPL do Xtend).
 
-## Caminho recomendado (OpenAPI, código próprio)
+`Camera.stream_source()` devolve a URL; o HA usa **ffmpeg** para o player.
 
-1. **HLS / RTSP allocate** (mais simples para o HA `stream`/`ffmpeg`):
-   - Endpoint típico: `POST /v1.0/devices/{device_id}/stream/actions/allocate` (ou variante Sharing)
-   - Tipos: `hls`, `rtsp`, `rtmp`, `flv`
-   - Retornar URL em `Camera.stream_source()`
+## Pré-requisito no iot.tuya.com (igual Xtend)
 
-2. **WebRTC** (melhor latência, mais complexo):
-   - `GET /v1.0/devices/{device_id}/webrtc-configs`
-   - Troca SDP / ICE (mesmo fluxo que o app Smart Life)
-   - Requer handlers HA WebRTC (`async_handle_async_webrtc_offer`, etc.)
+1. Cloud → Cloud Services  
+2. Ativar trial **IoT Video Live Stream**  
+3. Confirmar que o serviço aparece ativo  
 
-3. **Dependências**:
-   - Serviço de câmera / IPC autorizado no projeto IoT
-   - Possivelmente `ffmpeg` no HA para RTSP/HLS
-   - Token Cloud já obtido pelo `TuyaCloudApi` desta integração
+Guia espelhado: https://github.com/azerty9971/xtend_tuya/blob/main/docs/configure_cameras.md
 
-4. **Teste no RuGiu**:
-   - Device `eba0b0f3d9b38977ed8b0a`
-   - Comparar com a entidade Xtend existente até a paridade
+Também precisa de **IoT Core** + **Smart Lock Open Service** (unlock).
 
-## Enquanto isso
+## WebRTC (opcional, futuro)
 
-Manter Xtend Tuya **só** para a câmera, se necessário, e usar `slce_videolock` para unlock + sensores — ou desativar a câmera stub até o allocate estar pronto.
+Xtend prioriza WebRTC (`/v1.0/devices/{id}/webrtc-configs` + SDP). Melhor latência, mais complexo. RTSP/HLS cobre o caso RuGiu da SL-CE se o allocate funcionar.
+
+## Debug
+
+- Sem URL → log warning + serviço Live Stream não ativado / device offline  
+- Com URL mas tela preta → testar `ffmpeg` no HA; tentar HLS forçando só `hls` no código se RTSP falhar no host  

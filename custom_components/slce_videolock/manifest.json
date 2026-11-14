@@ -8,6 +8,7 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/rubensflinco/tuya-slce-videolock/issues",
   "loggers": ["custom_components.slce_videolock"],
+  "dependencies": ["ffmpeg"],
   "requirements": [],
-  "version": "0.2.0"
+  "version": "0.3.0"
 }

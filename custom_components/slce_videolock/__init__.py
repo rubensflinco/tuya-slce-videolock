@@ -1,4 +1,4 @@
-"""SL-CE Videolock — unified unlock + camera stub + sensors for Tuya videolock."""
+"""SL-CE Videolock — unified unlock + camera stream + sensors for Tuya videolock."""
 
 from __future__ import annotations
 

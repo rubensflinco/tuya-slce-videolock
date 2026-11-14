@@ -2,13 +2,13 @@
 
 Integração custom do **Home Assistant** para a **Fechadura Inteligente SL-CE (Wi-Fi)** (Novadigital / Tuya Smart Life — categoria `videolock`).
 
-Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores de status e stub de câmera.
+Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores e stream da câmera.
 
-| Capacidade | Status MVP | Origem do padrão |
-|------------|------------|------------------|
+| Capacidade | Status | Origem do padrão |
+|------------|--------|------------------|
 | Destrancar / trancar | ✅ Cloud ticket (`password-ticket` → `door-operate`) | [tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT) |
 | Bateria, online, campainha, last_* | ✅ Polling Cloud (~60 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
-| Stream da câmera | ⚠️ Stub + TODO | [xtend_tuya](https://github.com/azerty9971/xtend_tuya) prova o stream (GPL — não copiado); ver [`docs/camera-todo.md`](docs/camera-todo.md) |
+| Stream da câmera | ✅ OpenAPI `stream/actions/allocate` (RTSP/HLS) | Mesmo endpoint IoT do [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (código MIT próprio; GPL não copiado) — ver [`docs/camera-todo.md`](docs/camera-todo.md) |
 
 ## Por que existe
 
@@ -23,6 +23,7 @@ A integração oficial Tuya **não** expõe `lock`. Três addons cobrem pedaços
 3. Autorizar serviços:
    - **IoT Core**
    - **Smart Lock Open Service** (trial ~6 meses — renovar quando expirar)
+   - **IoT Video Live Stream** (necessário para a câmera — mesmo passo do Xtend)
 4. No app Smart Life: ativar **Remote Unlock / Unlock without password** na fechadura
 5. Anotar **Access ID**, **Access Secret**, **Device ID** e a **região** do data center do projeto (`us` / `eu` / `cn` / `in`)
 
@@ -50,7 +51,7 @@ Identificador no registry: `(slce_videolock, <device_id>)`.
 | `lock` | Fechadura (ticket unlock/lock) |
 | `sensor` | Bateria, last fingerprint/password/card, app unlocks, temporary codes, last alarm, last contact |
 | `binary_sensor` | Online, Campainha, Alerta de coação |
-| `camera` | Stub (sem stream ainda) |
+| `camera` | Stream live (allocate RTSP/HLS via Cloud) |
 
 ## Desenvolvimento
 
@@ -66,7 +67,7 @@ python -m unittest discover -s tests -v
 - Código desta integração: **MIT** (Rubens Flinco / RuGiu)
 - Padrões de ticket unlock adaptados de [nicolasglg/tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT)
 - Padrões de sensores / polling adaptados de [crestall/ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT)
-- Câmera: estudo de comportamento em [azerty9971/xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL-3 — **sem cópia de código**)
+- Câmera: endpoint OpenAPI alinhado ao caminho IoT de [azerty9971/xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL-3 — **sem cópia de código**)
 
 ## Licença
 
