@@ -149,6 +149,8 @@ class TuyaCloudApi:
         self._token: str | None = None
         self._token_expiry: float = 0.0
         self._uid: str | None = None
+        # device_id → (expires_at, error_msg) for stream allocate failures
+        self._stream_fail_cache: dict[str, tuple[float, str]] = {}
 
     async def async_close(self) -> None:
         """Close owned aiohttp session if any."""
@@ -428,8 +430,11 @@ class TuyaCloudApi:
 
     async def async_allocate_stream(
         self, device_id: str, stream_type: str = "hls"
-    ) -> str | None:
+    ) -> tuple[str | None, str | None]:
         """Allocate a live stream URL (hls/rtsp/…).
+
+        Returns ``(url, error_message)``. ``error_message`` is set when the
+        Cloud call fails (e.g. IoT Video Live Stream not subscribed).
 
         Tuya docs: POST /v1.0/devices/{device_id}/stream/actions/allocate
         Body: {"type": "hls"|"rtsp"|...}
@@ -438,23 +443,45 @@ class TuyaCloudApi:
         path = STREAM_ALLOCATE_ENDPOINT.format(device_id=device_id)
         resp = await self._request("POST", path, {"type": stype})
         if not resp.get("success"):
+            msg = str(resp.get("msg") or "allocate failed")
+            code = resp.get("code")
+            detail = f"{msg}" + (f" ({code})" if code is not None else "")
             _LOGGER.warning(
                 "Stream allocate (%s) failed for %s: %s",
                 stype,
                 device_id,
-                resp.get("msg"),
+                detail,
             )
-            return None
+            return None, detail
         result = resp.get("result") or {}
         url = result.get("url") if isinstance(result, dict) else None
-        return str(url) if url else None
+        if not url:
+            return None, "allocate returned empty url"
+        return str(url), None
 
     async def async_allocate_stream_preferred(
         self,
         device_id: str,
         preferred: str | None = None,
-    ) -> tuple[str | None, str | None]:
-        """Try preferred type then fallbacks; return (url, type_used)."""
+    ) -> tuple[str | None, str | None, str | None]:
+        """Try preferred type then fallbacks.
+
+        Returns ``(url, type_used, error_message)``.
+        If the Cloud project lacks *IoT Video Live Stream*, all types fail with
+        the same permission error — stop after the first such failure.
+        """
+        # Short negative cache: HA retries stream/snapshot aggressively.
+        cache_key = f"stream_fail:{device_id}"
+        cached = getattr(self, "_stream_fail_cache", None)
+        if isinstance(cached, dict):
+            entry = cached.get(cache_key)
+            if (
+                isinstance(entry, tuple)
+                and len(entry) == 2
+                and time.time() < float(entry[0])
+            ):
+                return None, None, str(entry[1])
+
         order: list[str] = []
         if preferred:
             order.append(preferred.strip().lower())
@@ -462,8 +489,24 @@ class TuyaCloudApi:
             if item not in order:
                 order.append(item)
 
+        last_err: str | None = None
         for stype in order:
-            url = await self.async_allocate_stream(device_id, stype)
+            url, err = await self.async_allocate_stream(device_id, stype)
             if url:
-                return url, stype
-        return None, None
+                return url, stype, None
+            last_err = err
+            # Same Cloud subscription gate for every type — no point hammering.
+            if err and (
+                "not subscribed" in err.lower()
+                or "no permissions" in err.lower()
+            ):
+                break
+
+        if last_err:
+            if not hasattr(self, "_stream_fail_cache") or not isinstance(
+                getattr(self, "_stream_fail_cache"), dict
+            ):
+                self._stream_fail_cache = {}
+            # 10 minutes — user needs to subscribe the API, not retry.
+            self._stream_fail_cache[cache_key] = (time.time() + 600.0, last_err)
+        return None, None, last_err

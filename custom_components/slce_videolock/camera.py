@@ -63,6 +63,7 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
         self._preferred_stream = (preferred_stream or DEFAULT_STREAM_TYPE).lower()
         self._attr_unique_id = f"{device_id}_camera"
         self._last_stream_type: str | None = None
+        self._last_stream_error: str | None = None
         name = None
         if coordinator.data:
             name = coordinator.data.get("name")
@@ -83,24 +84,31 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
         }
         if self._last_stream_type:
             attrs["allocated_stream_type"] = self._last_stream_type
+        if self._last_stream_error:
+            attrs["stream_error"] = self._last_stream_error
+            if "not subscribed" in self._last_stream_error.lower():
+                attrs["stream_fix_hint"] = (
+                    "Ative o trial IoT Video Live Stream no projeto Tuya Cloud "
+                    "(Cloud → Cloud Services / Service API), como no Xtend Tuya."
+                )
         return attrs
 
     async def stream_source(self) -> str | None:
         """Return a freshly allocated live stream URL for HA stream/ffmpeg."""
-        url, used = await self._api.async_allocate_stream_preferred(
+        url, used, err = await self._api.async_allocate_stream_preferred(
             self._device_id, self._preferred_stream
         )
         self._last_stream_type = used
+        self._last_stream_error = err
         if not url:
             _LOGGER.error(
-                "Could not allocate stream for %s (tried preferred=%s)",
+                "Could not allocate stream for %s (preferred=%s): %s",
                 self._device_id,
                 self._preferred_stream,
+                err or "unknown",
             )
             return None
-        _LOGGER.debug(
-            "Allocated %s stream for %s", used, self._device_id
-        )
+        _LOGGER.debug("Allocated %s stream for %s", used, self._device_id)
         return url
 
     async def async_camera_image(

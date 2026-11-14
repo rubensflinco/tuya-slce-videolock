@@ -41,6 +41,8 @@ TUYA_PROJECT_URL = (
     "https://platform.tuya.com/cloud/basic"
     "?id=p1630510951574getp4q&region=AZ&toptab=project"
 )
+# Same place Xtend documents for camera enablement
+TUYA_CLOUD_SERVICES_URL = "https://iot.tuya.com/cloud/svc"
 
 # Smart Lock ticket unlock (MIT pattern from nicolasglg/tuya-smart-lock)
 TICKET_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/password-ticket"

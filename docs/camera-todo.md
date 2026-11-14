@@ -45,5 +45,26 @@ Xtend prioriza WebRTC (`/v1.0/devices/{id}/webrtc-configs` + SDP). Melhor latên
 
 ## Debug
 
-- Sem URL → log warning + serviço Live Stream não ativado / device offline  
+### Erro real no RuGiu (HA logs)
+
+```
+Stream allocate (hls|rtsp|flv|rtmp) failed: No permissions. This API is not subscribed.
+Error requesting stream: Camera … does not support streaming
+```
+
+Causa: o projeto Cloud das credenciais **não tem** o serviço **IoT Video Live Stream** autorizado (trial). O unlock/sensores usam outras APIs e continuam OK; só o allocate da câmera exige esse serviço.
+
+Correção (igual [Xtend configure_cameras](https://github.com/azerty9971/xtend_tuya/blob/main/docs/configure_cameras.md)):
+
+1. [iot.tuya.com](https://iot.tuya.com) → **Cloud → Cloud Services** (ou Service API no projeto)
+2. Linha **IoT Video Live Stream** → **Free Trial** / Authorize
+3. Confirmar status ativo
+4. No HA: reabrir a entidade câmera (ou recarregar a integração)
+
+Nota: Xtend costuma funcionar via **Sharing / login Smart Life** (outra trilha de auth). Esta integração usa **OpenAPI do projeto** — o trial no *mesmo* Access ID/Secret é obrigatório.
+
+### Outros
+
+- Sem URL → `stream_error` nos atributos da câmera + log  
 - Com URL mas tela preta → testar `ffmpeg` no HA; forçar `hls` se RTSP falhar no host  
+ 
