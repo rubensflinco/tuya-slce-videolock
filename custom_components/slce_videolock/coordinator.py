@@ -73,6 +73,10 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_doorbell_ts: int = 0
         self._last_alarm_ts: int = 0
         self._last_unlock_ts: int = 0
+        # Armados quando cloud está false; um disparo por "sessão" sticky true
+        # (evita re-fire a cada poll enquanto doorbell=true no Tuya).
+        self._doorbell_armed: bool = True
+        self._hijack_armed: bool = True
         super().__init__(
             hass,
             _LOGGER,
@@ -101,11 +105,16 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         @callback
         def _do_reset(_now: Any) -> None:
             self._pending_resets.pop(dp_key, None)
-            # Mark as reset in our snapshot so binary_sensor sees False
-            if dp_key in self._last_status_snapshot:
-                self._last_status_snapshot[dp_key] = False
+            # Mark as reset in snapshot + data so binary_sensor sees False
+            self._last_status_snapshot[dp_key] = False
+            if self.data and isinstance(self.data.get("status"), dict):
+                new_data = dict(self.data)
+                new_status = dict(new_data["status"])
+                new_status[dp_key] = False
+                new_data["status"] = new_status
                 _LOGGER.debug("Pulse reset: %s → False", dp_key)
-                # Trigger coordinator listeners to update entities
+                self.async_set_updated_data(new_data)
+            elif self.data:
                 self.async_set_updated_data(self.data)
 
         self._pending_resets[dp_key] = async_call_later(
@@ -118,28 +127,38 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Detect changes in status DPs and fire events accordingly."""
         now_ms = int(time.time() * 1000)
 
-        # Doorbell: fire event on any true value (even if was already true)
+        # Doorbell: cloud often leaves doorbell=true forever.
+        # Fire ONCE when we first see true while armed; re-arm only on false.
+        # First poll after start: disarm sticky true without firing (no spam on reload).
         doorbell_val = new_status.get(DP_DOORBELL)
         if doorbell_val is True:
-            # Only fire if this is a new press (not the same stuck value)
-            old_val = old_status.get(DP_DOORBELL)
-            if old_val is not True or (now_ms - self._last_doorbell_ts > 5000):
+            if not old_status:
+                self._doorbell_armed = False
+                self._schedule_pulse_reset(DP_DOORBELL)
+            elif self._doorbell_armed:
+                self._doorbell_armed = False
                 self._last_doorbell_ts = now_ms
                 self._event_counts["doorbell"] += 1
                 self._fire_event("doorbell_event", EVENT_TYPE_DOORBELL)
-                _LOGGER.info("Doorbell event detected")
-            # Schedule reset for sticky value
-            self._schedule_pulse_reset(DP_DOORBELL)
+                _LOGGER.info("Doorbell event detected (rising edge)")
+                self._schedule_pulse_reset(DP_DOORBELL)
+        elif doorbell_val is False:
+            self._doorbell_armed = True
 
-        # Hijack/duress: similar pulse handling
+        # Hijack/duress: same arming model (no re-fire while sticky true)
         hijack_val = new_status.get(DP_HIJACK)
         if hijack_val is True:
-            old_val = old_status.get(DP_HIJACK)
-            if old_val is not True:
+            if not old_status:
+                self._hijack_armed = False
+                self._schedule_pulse_reset(DP_HIJACK)
+            elif self._hijack_armed:
+                self._hijack_armed = False
                 self._event_counts["hijack"] += 1
                 self._fire_event("alarm_event", EVENT_TYPE_HIJACK)
                 _LOGGER.warning("Hijack/duress event detected!")
-            self._schedule_pulse_reset(DP_HIJACK)
+                self._schedule_pulse_reset(DP_HIJACK)
+        elif hijack_val is False:
+            self._hijack_armed = True
 
         # Alarm: detect changes or same value with new timestamp
         alarm_val = new_status.get(DP_ALARM_LOCK)
@@ -271,15 +290,14 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Detect changes and fire events
         self._detect_status_changes(self._last_status_snapshot, status)
 
-        # Apply any pulse resets (override sticky values)
+        # While disarmed (já tratamos o sticky true), binary fica off até cloud limpar
         effective_status = dict(status)
-        for dp_key, is_reset in list(self._last_status_snapshot.items()):
-            if is_reset is False and dp_key in (DP_DOORBELL, DP_HIJACK):
-                # Our reset override is still active
-                if status.get(dp_key) is True:
-                    effective_status[dp_key] = False
+        if status.get(DP_DOORBELL) is True and not self._doorbell_armed:
+            effective_status[DP_DOORBELL] = False
+        if status.get(DP_HIJACK) is True and not self._hijack_armed:
+            effective_status[DP_HIJACK] = False
 
-        # Update snapshot for next comparison
+        # Update snapshot for next comparison (cloud raw — arming controla o fire)
         self._last_status_snapshot = dict(status)
 
         # Fetch event logs (non-blocking, don't fail the update)
