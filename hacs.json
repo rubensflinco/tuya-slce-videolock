@@ -1,5 +1,6 @@
 {
   "name": "Tuya SL-CE Videolock",
+  "zip_release": true,
   "filename": "slce_videolock.zip",
   "render_readme": true,
   "country": "BR",
