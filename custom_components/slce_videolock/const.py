@@ -16,7 +16,27 @@ CONF_UNLOCK_PIN_CONFIRM = "unlock_pin_confirm"
 CONF_UNLOCK_PIN_SALT = "unlock_pin_salt"
 CONF_UNLOCK_PIN_HASH = "unlock_pin_hash"
 CONF_UPDATE_INTERVAL = "update_interval"
+CONF_SNAPSHOT_RETENTION_DAYS = "snapshot_retention_days"
 UNLOCK_PIN_CODE_FORMAT = r"^\d{4}$"
+
+# Doorbell camera snapshots (gallery + last-image entity)
+DEFAULT_SNAPSHOT_RETENTION_DAYS = 30
+MIN_SNAPSHOT_RETENTION_DAYS = 1
+MAX_SNAPSHOT_RETENTION_DAYS = 365
+SNAPSHOT_SUBDIR = "slce_videolock"
+SNAPSHOT_HTTP_URL_PREFIX = "/api/slce_videolock"
+
+
+def clamp_retention_days(raw: object) -> int:
+    """Clamp doorbell snapshot retention days to allowed range."""
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return DEFAULT_SNAPSHOT_RETENTION_DAYS
+    return max(
+        MIN_SNAPSHOT_RETENTION_DAYS,
+        min(MAX_SNAPSHOT_RETENTION_DAYS, value),
+    )
 
 # Production RuGiu device (docs/device-sl-ce.md)
 DEFAULT_DEVICE_ID = "eba0b0f3d9b38977ed8b0a"

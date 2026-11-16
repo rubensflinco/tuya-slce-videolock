@@ -6,7 +6,9 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "ffmpeg"
+    "ffmpeg",
+    "media_source",
+    "logbook"
   ],
   "documentation": "https://github.com/rubensflinco/tuya-slce-videolock",
   "integration_type": "device",
@@ -16,5 +18,5 @@
     "custom_components.slce_videolock"
   ],
   "requirements": [],
-  "version": "0.7.1"
+  "version": "0.7.2"
 }

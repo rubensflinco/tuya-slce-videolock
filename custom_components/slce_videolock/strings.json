@@ -56,6 +56,16 @@
         "data_description": {
           "update_interval": "Seconds between Cloud status refreshes."
         }
+      },
+      "snapshots": {
+        "title": "Doorbell photo retention",
+        "description": "When someone rings the doorbell, the integration saves a still from the lock camera.\n\nPhotos appear in **Media → Tuya SL-CE Videolock** (gallery) and as **Last doorbell photo** on the device. Activity logs a text entry pointing there.\n\nDefault: **{default_days} days**. Range: {min_days}–{max_days}. Older files are deleted automatically.",
+        "data": {
+          "snapshot_retention_days": "Keep photos for"
+        },
+        "data_description": {
+          "snapshot_retention_days": "Days to keep each doorbell snapshot before auto-delete."
+        }
       }
     },
     "abort": {
@@ -73,13 +83,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "Cloud poll interval",
-        "description": "How often Home Assistant asks Tuya Cloud for lock status.\n\nDefault: **{default_seconds}s**. Range: {min_seconds}–{max_seconds}s. Values under ~5s may hit Tuya rate limits.\n\nThe unlock PIN cannot be changed here — remove and re-add the integration to set a new PIN.",
+        "title": "Poll interval & doorbell photos",
+        "description": "Cloud poll: default **{default_seconds}s** (range {min_seconds}–{max_seconds}s).\n\nDoorbell photo retention: default **{default_days} days** (range {min_days}–{max_days}). Gallery: Media → Tuya SL-CE Videolock.\n\nThe unlock PIN cannot be changed here — remove and re-add the integration to set a new PIN.",
         "data": {
-          "update_interval": "Poll interval"
+          "update_interval": "Poll interval",
+          "snapshot_retention_days": "Keep doorbell photos for"
         },
         "data_description": {
-          "update_interval": "Seconds between Cloud status refreshes."
+          "update_interval": "Seconds between Cloud status refreshes.",
+          "snapshot_retention_days": "Days to keep each doorbell snapshot before auto-delete."
         }
       }
     }

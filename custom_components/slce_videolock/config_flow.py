@@ -1,4 +1,4 @@
-"""Config flow: credentials → lock → unlock PIN → poll interval."""
+"""Config flow: credentials → lock → unlock PIN → poll interval → snapshot retention."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_DEVICE_NAME,
     CONF_REGION,
+    CONF_SNAPSHOT_RETENTION_DAYS,
     CONF_UNLOCK_PIN,
     CONF_UNLOCK_PIN_CONFIRM,
     CONF_UNLOCK_PIN_HASH,
@@ -24,12 +25,16 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     DEFAULT_DEVICE_NAME,
     DEFAULT_REGION,
+    DEFAULT_SNAPSHOT_RETENTION_DAYS,
     DEFAULT_UPDATE_INTERVAL_SECONDS,
     DOMAIN,
+    MAX_SNAPSHOT_RETENTION_DAYS,
     MAX_UPDATE_INTERVAL_SECONDS,
+    MIN_SNAPSHOT_RETENTION_DAYS,
     MIN_UPDATE_INTERVAL_SECONDS,
     REGION_LABELS,
     TUYA_PROJECT_URL,
+    clamp_retention_days,
 )
 from .pin import hash_unlock_pin, is_valid_unlock_pin
 from .tuya_api import TuyaApiError, TuyaCloudApi, format_device_option
@@ -46,6 +51,7 @@ def _clamp_update_interval(raw: Any) -> int:
         MIN_UPDATE_INTERVAL_SECONDS,
         min(MAX_UPDATE_INTERVAL_SECONDS, value),
     )
+
 
 _REGION_ALIASES: dict[str, str] = {
     "ay": "cn",
@@ -140,6 +146,53 @@ def _update_interval_schema(default: int) -> vol.Schema:
     )
 
 
+def _snapshot_retention_schema(default: int) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_SNAPSHOT_RETENTION_DAYS, default=default
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=MIN_SNAPSHOT_RETENTION_DAYS,
+                    max=MAX_SNAPSHOT_RETENTION_DAYS,
+                    step=1,
+                    unit_of_measurement="d",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+        }
+    )
+
+
+def _options_schema(interval: int, retention: int) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_UPDATE_INTERVAL, default=interval
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=MIN_UPDATE_INTERVAL_SECONDS,
+                    max=MAX_UPDATE_INTERVAL_SECONDS,
+                    step=1,
+                    unit_of_measurement="s",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Required(
+                CONF_SNAPSHOT_RETENTION_DAYS, default=retention
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=MIN_SNAPSHOT_RETENTION_DAYS,
+                    max=MAX_SNAPSHOT_RETENTION_DAYS,
+                    step=1,
+                    unit_of_measurement="d",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+        }
+    )
+
+
 class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Credentials, then select lock — or type Device ID if discovery is empty."""
 
@@ -155,13 +208,14 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._pin_salt: str = ""
         self._pin_hash: str = ""
         self._update_interval: int = DEFAULT_UPDATE_INTERVAL_SECONDS
+        self._snapshot_retention_days: int = DEFAULT_SNAPSHOT_RETENTION_DAYS
 
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
-        """Expose poll-interval options (PIN stays immutable)."""
+        """Expose poll-interval + snapshot retention options (PIN stays immutable)."""
         return SlceVideolockOptionsFlow()
 
     async def async_step_user(self, user_input: dict | None = None):
@@ -310,13 +364,7 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._update_interval = _clamp_update_interval(
                 user_input.get(CONF_UPDATE_INTERVAL)
             )
-            return await self._async_finish(
-                self._device_id,
-                self._device_name,
-                pin_salt=self._pin_salt,
-                pin_hash=self._pin_hash,
-                update_interval=self._update_interval,
-            )
+            return await self.async_step_snapshots()
 
         return self.async_show_form(
             step_id="polling",
@@ -328,6 +376,31 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_snapshots(self, user_input: dict | None = None):
+        """Step 5: doorbell photo retention (default 30 days)."""
+        if user_input is not None:
+            self._snapshot_retention_days = clamp_retention_days(
+                user_input.get(CONF_SNAPSHOT_RETENTION_DAYS)
+            )
+            return await self._async_finish(
+                self._device_id,
+                self._device_name,
+                pin_salt=self._pin_salt,
+                pin_hash=self._pin_hash,
+                update_interval=self._update_interval,
+                snapshot_retention_days=self._snapshot_retention_days,
+            )
+
+        return self.async_show_form(
+            step_id="snapshots",
+            data_schema=_snapshot_retention_schema(DEFAULT_SNAPSHOT_RETENTION_DAYS),
+            description_placeholders={
+                "default_days": str(DEFAULT_SNAPSHOT_RETENTION_DAYS),
+                "min_days": str(MIN_SNAPSHOT_RETENTION_DAYS),
+                "max_days": str(MAX_SNAPSHOT_RETENTION_DAYS),
+            },
+        )
+
     async def _async_finish(
         self,
         device_id: str,
@@ -336,6 +409,7 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         pin_salt: str,
         pin_hash: str,
         update_interval: int,
+        snapshot_retention_days: int,
     ):
         """Create config entry after unique-id checks + soft remote-unlock warn."""
         await self.async_set_unique_id(device_id)
@@ -372,12 +446,13 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
             options={
                 CONF_UPDATE_INTERVAL: update_interval,
+                CONF_SNAPSHOT_RETENTION_DAYS: snapshot_retention_days,
             },
         )
 
 
 class SlceVideolockOptionsFlow(config_entries.OptionsFlow):
-    """Allow changing poll interval after setup (not the unlock PIN)."""
+    """Allow changing poll interval and snapshot retention (not the unlock PIN)."""
 
     async def async_step_init(self, user_input: dict | None = None):
         """Manage options."""
@@ -388,10 +463,13 @@ class SlceVideolockOptionsFlow(config_entries.OptionsFlow):
                     CONF_UPDATE_INTERVAL: _clamp_update_interval(
                         user_input.get(CONF_UPDATE_INTERVAL)
                     ),
+                    CONF_SNAPSHOT_RETENTION_DAYS: clamp_retention_days(
+                        user_input.get(CONF_SNAPSHOT_RETENTION_DAYS)
+                    ),
                 },
             )
 
-        current = _clamp_update_interval(
+        current_interval = _clamp_update_interval(
             self.config_entry.options.get(
                 CONF_UPDATE_INTERVAL,
                 self.config_entry.data.get(
@@ -399,12 +477,23 @@ class SlceVideolockOptionsFlow(config_entries.OptionsFlow):
                 ),
             )
         )
+        current_retention = clamp_retention_days(
+            self.config_entry.options.get(
+                CONF_SNAPSHOT_RETENTION_DAYS,
+                self.config_entry.data.get(
+                    CONF_SNAPSHOT_RETENTION_DAYS, DEFAULT_SNAPSHOT_RETENTION_DAYS
+                ),
+            )
+        )
         return self.async_show_form(
             step_id="init",
-            data_schema=_update_interval_schema(current),
+            data_schema=_options_schema(current_interval, current_retention),
             description_placeholders={
                 "default_seconds": str(DEFAULT_UPDATE_INTERVAL_SECONDS),
                 "min_seconds": str(MIN_UPDATE_INTERVAL_SECONDS),
                 "max_seconds": str(MAX_UPDATE_INTERVAL_SECONDS),
+                "default_days": str(DEFAULT_SNAPSHOT_RETENTION_DAYS),
+                "min_days": str(MIN_SNAPSHOT_RETENTION_DAYS),
+                "max_days": str(MAX_SNAPSHOT_RETENTION_DAYS),
             },
         )

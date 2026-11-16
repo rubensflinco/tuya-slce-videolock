@@ -56,6 +56,16 @@
         "data_description": {
           "update_interval": "Segundos entre atualizações de status na Cloud."
         }
+      },
+      "snapshots": {
+        "title": "Retenção das fotos da campainha",
+        "description": "Quando alguém toca a campainha, a integração tira uma foto da câmera da fechadura.\n\nAs fotos aparecem em **Mídia → Tuya SL-CE Videolock** (galeria) e como **Última foto da campainha** no dispositivo. Em Atividades fica um registro de texto indicando onde ver.\n\nPadrão: **{default_days} dias**. Faixa: {min_days}–{max_days}. Arquivos mais antigos são apagados automaticamente.",
+        "data": {
+          "snapshot_retention_days": "Guardar fotos por"
+        },
+        "data_description": {
+          "snapshot_retention_days": "Dias para manter cada foto da campainha antes de apagar."
+        }
       }
     },
     "abort": {
@@ -73,13 +83,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "Intervalo de polling na Cloud",
-        "description": "De quanto em quanto tempo o Home Assistant consulta a Cloud Tuya.\n\nPadrão: **{default_seconds}s**. Faixa: {min_seconds}–{max_seconds}s. Valores abaixo de ~5s podem bater no rate limit.\n\nA senha de destrave **não** muda aqui — remova e adicione a integração para trocar o PIN.",
+        "title": "Polling e fotos da campainha",
+        "description": "Polling na Cloud: padrão **{default_seconds}s** (faixa {min_seconds}–{max_seconds}s).\n\nRetenção das fotos da campainha: padrão **{default_days} dias** (faixa {min_days}–{max_days}). Galeria: Mídia → Tuya SL-CE Videolock.\n\nA senha de destrave **não** muda aqui — remova e adicione a integração para trocar o PIN.",
         "data": {
-          "update_interval": "Intervalo de poll"
+          "update_interval": "Intervalo de poll",
+          "snapshot_retention_days": "Guardar fotos da campainha por"
         },
         "data_description": {
-          "update_interval": "Segundos entre atualizações de status na Cloud."
+          "update_interval": "Segundos entre atualizações de status na Cloud.",
+          "snapshot_retention_days": "Dias para manter cada foto da campainha antes de apagar."
         }
       }
     }

@@ -14,8 +14,9 @@ Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores de stat
 | PIN de destrave remoto (4 dígitos) | ✅ Definido no setup; hash PBKDF2; teclado nativo do HA | `LockEntity.code_format` |
 | Bateria, online, campainha, last_* | ✅ Polling Cloud configurável (padrão **60 s**, min 1 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
 | Stream da câmera | ✅ Sharing + `stream/actions/allocate` (RTSP/HLS) + ffmpeg | Docs Tuya; comportamento estudado em [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **não copiado**) — ver [`docs/camera-todo.md`](docs/camera-todo.md) |
+| Foto na campainha + galeria | ✅ Snapshot na campainha; galeria em **Mídia**; retenção padrão **30 dias** (configurável); registro em Atividades | `image` + `media_source` |
 
-Versão atual: **0.7.1**.
+Versão atual: **0.7.2**.
 
 Câmera: tenta primeiro o stream da integração oficial **Tuya** (sessão Smart Life, como o Xtend — sem trial). Fallback OpenAPI só se precisar; nesse caso o trial **IoT Video Live Stream** é grátis no portal (não dá para o addon “clicar” isso com Access ID/Secret). Detalhes: [`docs/camera-todo.md`](docs/camera-todo.md).
 
@@ -46,7 +47,7 @@ Device RuGiu de referência: `eba0b0f3d9b38977ed8b0a` — ver [`docs/device-sl-c
 2. Garantir **ffmpeg** disponível no HA (a integração declara dependência)
 3. Reiniciar o Home Assistant
 4. **Settings → Devices & Services → Add Integration → Tuya SL-CE Videolock**
-5. Informar Access ID / Secret / região, escolher a fechadura, definir a **senha de 4 dígitos** e o **intervalo de polling** (padrão 60 s)
+5. Informar Access ID / Secret / região, escolher a fechadura, definir a **senha de 4 dígitos**, o **intervalo de polling** (padrão 60 s) e a **retenção das fotos da campainha** (padrão 30 dias)
 
 ### HACS
 
@@ -59,6 +60,15 @@ No setup (e depois em **Configurar** da integração) você escolhe de quantos e
 - Padrão: **60 s**
 - Faixa: **1–600 s**
 - Valores muito baixos (ex.: 1 s) deixam campainha/last_* mais ágeis, mas cada poll faz várias chamadas — a Tuya pode rate-limitar
+
+## Fotos da campainha
+
+Ao tocar a campainha, a integração tira uma foto da câmera da fechadura:
+
+- **Última foto** — entidade `image` no device («Última foto da campainha»)
+- **Galeria** — menu lateral **Mídia → Tuya SL-CE Videolock** (todas as fotos ainda não apagadas)
+- **Atividades** — registro de texto *«Campainha — foto»* indicando onde ver (o painel Atividades do HA **não** embute a imagem; o URI `media-source://slce_videolock/…` fica na mensagem)
+- **Retenção** — padrão **30 dias** (1–365), escolhido no setup e em **Configurar**; depois disso os arquivos são apagados sozinhos
 
 ## Senha de destrave remoto
 
@@ -78,6 +88,8 @@ Identificador no registry: `(slce_videolock, <device_id>)`.
 | `sensor` | Bateria, last fingerprint/password/card, app unlocks, temporary codes, last alarm, pedidos / last contact |
 | `binary_sensor` | Online, Campainha, Alerta de coação |
 | `camera` | Stream via allocate + snapshot ffmpeg |
+| `image` | Última foto da campainha |
+| Media Browser | Galeria das fotos retidas (`media-source://slce_videolock/…`) |
 
 ## Testar câmera no HAOS
 

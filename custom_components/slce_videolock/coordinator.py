@@ -37,6 +37,7 @@ from .tuya_api import TuyaCloudApi
 
 if TYPE_CHECKING:
     from .event import SlceEventEntity
+    from .snapshots import DoorbellSnapshotGallery
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.api = api
         self.device_id = device_id
         self._event_entities: dict[str, "SlceEventEntity"] = {}
+        self._snapshot_gallery: DoorbellSnapshotGallery | None = None
         self._last_event_timestamp_ms: int = 0
         self._last_status_snapshot: dict[str, Any] = {}
         self._pending_resets: dict[str, asyncio.TimerHandle | None] = {}
@@ -89,6 +91,18 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Register event entities for dispatch."""
         for entity in entities:
             self._event_entities[entity.event_key] = entity
+
+    def set_snapshot_gallery(self, gallery: DoorbellSnapshotGallery) -> None:
+        """Attach doorbell snapshot gallery (capture on ring)."""
+        self._snapshot_gallery = gallery
+
+    @callback
+    def _schedule_doorbell_snapshot(self) -> None:
+        """Fire-and-forget still capture so poll cycle is not blocked."""
+        gallery = self._snapshot_gallery
+        if gallery is None:
+            return
+        self.hass.async_create_task(gallery.async_capture_doorbell())
 
     @callback
     def _schedule_pulse_reset(self, dp_key: str) -> None:
@@ -141,6 +155,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._last_doorbell_ts = now_ms
                 self._event_counts["doorbell"] += 1
                 self._fire_event("doorbell_event", EVENT_TYPE_DOORBELL)
+                self._schedule_doorbell_snapshot()
                 _LOGGER.info("Doorbell event detected (rising edge)")
                 self._schedule_pulse_reset(DP_DOORBELL)
         elif doorbell_val is False:
@@ -248,6 +263,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "timestamp": ts,
                 "record_id": event.get("record_id"),
             })
+            self._schedule_doorbell_snapshot()
             self._schedule_pulse_reset(DP_DOORBELL)
             _LOGGER.info("Doorbell event from records (ts=%s)", ts)
 
