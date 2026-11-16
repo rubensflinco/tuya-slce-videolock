@@ -89,8 +89,11 @@ Ver skills em `.cursor/skills/` e [`AGENTS.md`](AGENTS.md). Referências: [`docs
 
 ```bash
 python scripts/check_manifest.py
+python scripts/build_release_zip.py
 python -m unittest discover -s tests -v
 ```
+
+Release (Marketplace/HACS): skill `ha-release` — bump + este README (também exibido no HA via `render_readme`) + tag + `gh release` com `slce_videolock.zip`.
 
 ## Atribuição / licenças
 

@@ -50,7 +50,12 @@ Ver [`docs/references.md`](docs/references.md). Antes de codificar unlock/câmer
 |-------|-------------|
 | `slce-videolock-dev` | Desenvolver / estender a integração |
 | `tuya-slce-device` | Consultar ficha do aparelho e DPs |
-| `ha-integration-package` | Empacotar zip / HACS / validar manifest |
+| `ha-integration-package` | Validar manifest / estrutura HACS |
+| `ha-release` | **Subir versão** (tag + zip_release + `gh release`) |
+
+Release: rule `.cursor/rules/ha-release.mdc` + skill `ha-release`.
+Ao pedir **subir versão**: commit + push + GitHub Release (nunca só localhost).
+Sempre atualizar `README.md` (é o README do Marketplace/HA via `render_readme`).
 
 ## Fora de escopo (MVP)
 

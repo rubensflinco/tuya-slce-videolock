@@ -1,0 +1,16 @@
+---
+description: Ao subir versão — commit+push+GitHub Release; atualizar README (repo e HA)
+alwaysApply: true
+---
+
+# Release HA / Marketplace
+
+Pedido para **subir versão** / **publicar release** = executar o fluxo **completo até o GitHub**, não só preparar no localhost.
+
+1. Ler e seguir `.cursor/skills/ha-release/SKILL.md`
+2. Atualizar **`README.md`** (versão + features) — com `render_readme: true` no `hacs.json`, **esse mesmo arquivo** é o README do Marketplace/HA
+3. Bump `manifest.json` → commit → tag (= version, sem `v`) → **push** → **`gh release create`** com `dist/slce_videolock.zip`
+4. `hacs.json`: `zip_release: true` + `filename: "slce_videolock.zip"`
+5. Zip via `python scripts/build_release_zip.py` (arquivos na **raiz** do zip)
+
+**Proibido:** parar após commit local, zip local, ou “está pronto para você publicar”. Sempre `git push` + release publicada, e devolver a URL da release.
