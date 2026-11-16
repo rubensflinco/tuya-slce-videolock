@@ -15,6 +15,7 @@ CONF_UNLOCK_PIN = "unlock_pin"
 CONF_UNLOCK_PIN_CONFIRM = "unlock_pin_confirm"
 CONF_UNLOCK_PIN_SALT = "unlock_pin_salt"
 CONF_UNLOCK_PIN_HASH = "unlock_pin_hash"
+CONF_UPDATE_INTERVAL = "update_interval"
 UNLOCK_PIN_CODE_FORMAT = r"^\d{4}$"
 
 # Production RuGiu device (docs/device-sl-ce.md)
@@ -24,9 +25,14 @@ DEFAULT_REGION = "us"
 DEFAULT_STREAM_TYPE = "rtsp"
 DEFAULT_AUTO_LOCK_DELAY = 3
 
-# Polling: more aggressive to catch transient events (doorbell, alarms)
-# Cloud rate limit is ~1 req/s per device; 15s is safe and catches most pulses
-UPDATE_INTERVAL_SECONDS = 15
+# Polling interval (configurable at install / options)
+# Default 60s; min 1s allowed but Tuya Cloud rate-limits ~1 req/s and each
+# poll may issue multiple API calls — values < 5s can trigger throttling.
+DEFAULT_UPDATE_INTERVAL_SECONDS = 60
+MIN_UPDATE_INTERVAL_SECONDS = 1
+MAX_UPDATE_INTERVAL_SECONDS = 600
+# Backward-compatible alias used by older docs/skills
+UPDATE_INTERVAL_SECONDS = DEFAULT_UPDATE_INTERVAL_SECONDS
 
 # Auto-reset delay for sticky binary sensors (doorbell, hijack)
 # ha-tuya-lock-monitor uses 1s; we use 2s for safety margin

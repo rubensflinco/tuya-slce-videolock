@@ -46,6 +46,16 @@
           "unlock_pin": "Exactly four digits (0–9). Required every time someone unlocks remotely in HA.",
           "unlock_pin_confirm": "Type the same PIN again."
         }
+      },
+      "polling": {
+        "title": "Cloud poll interval",
+        "description": "How often Home Assistant asks Tuya Cloud for lock status (battery, online, doorbell, last unlock…).\n\nDefault: **{default_seconds}s**. Allowed range: {min_seconds}–{max_seconds}s.\n\nValues under ~5s are more responsive but may hit Tuya rate limits (each poll uses several API calls).",
+        "data": {
+          "update_interval": "Poll interval"
+        },
+        "data_description": {
+          "update_interval": "Seconds between Cloud status refreshes."
+        }
       }
     },
     "abort": {
@@ -58,6 +68,20 @@
       "no_compatible_devices": "No videolock / smart lock found in this project. Link the Smart Life account and confirm the device category is supported.",
       "invalid_pin": "PIN must be exactly 4 digits (0–9)",
       "pin_mismatch": "PIN confirmation does not match"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Cloud poll interval",
+        "description": "How often Home Assistant asks Tuya Cloud for lock status.\n\nDefault: **{default_seconds}s**. Range: {min_seconds}–{max_seconds}s. Values under ~5s may hit Tuya rate limits.\n\nThe unlock PIN cannot be changed here — remove and re-add the integration to set a new PIN.",
+        "data": {
+          "update_interval": "Poll interval"
+        },
+        "data_description": {
+          "update_interval": "Seconds between Cloud status refreshes."
+        }
+      }
     }
   },
   "exceptions": {

@@ -46,6 +46,16 @@
           "unlock_pin": "Exatamente quatro dígitos (0–9). Pedida toda vez que alguém destranca remotamente no HA.",
           "unlock_pin_confirm": "Digite a mesma senha novamente."
         }
+      },
+      "polling": {
+        "title": "Intervalo de polling na Cloud",
+        "description": "De quanto em quanto tempo o Home Assistant consulta a Cloud Tuya (bateria, online, campainha, último destrave…).\n\nPadrão: **{default_seconds}s**. Faixa: {min_seconds}–{max_seconds}s.\n\nValores abaixo de ~5s respondem mais rápido, mas podem bater no rate limit da Tuya (cada poll faz várias chamadas de API).",
+        "data": {
+          "update_interval": "Intervalo de poll"
+        },
+        "data_description": {
+          "update_interval": "Segundos entre atualizações de status na Cloud."
+        }
       }
     },
     "abort": {
@@ -58,6 +68,20 @@
       "no_compatible_devices": "Nenhuma fechadura/videolock encontrada neste projeto. Vincule a conta Smart Life e confira se a categoria do device é suportada.",
       "invalid_pin": "A senha deve ter exatamente 4 dígitos (0–9)",
       "pin_mismatch": "A confirmação da senha não confere"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Intervalo de polling na Cloud",
+        "description": "De quanto em quanto tempo o Home Assistant consulta a Cloud Tuya.\n\nPadrão: **{default_seconds}s**. Faixa: {min_seconds}–{max_seconds}s. Valores abaixo de ~5s podem bater no rate limit.\n\nA senha de destrave **não** muda aqui — remova e adicione a integração para trocar o PIN.",
+        "data": {
+          "update_interval": "Intervalo de poll"
+        },
+        "data_description": {
+          "update_interval": "Segundos entre atualizações de status na Cloud."
+        }
+      }
     }
   },
   "exceptions": {

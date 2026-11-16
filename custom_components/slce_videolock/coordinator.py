@@ -1,7 +1,7 @@
 """Cloud-polling coordinator for SL-CE status DPs + event detection.
 
 Enhanced coordinator that:
-1. Polls status DPs every UPDATE_INTERVAL_SECONDS (15s)
+1. Polls status DPs every configured update_interval (default 60s)
 2. Fetches recent event logs to detect new unlock/alarm events
 3. Fires HA event entities for doorbell, unlock methods, alarms
 4. Tracks last event timestamps to avoid duplicate firing
@@ -22,6 +22,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     ALL_UNLOCK_DPS,
+    DEFAULT_UPDATE_INTERVAL_SECONDS,
     DEVICE_NAME,
     DOMAIN,
     DP_ALARM_LOCK,
@@ -31,7 +32,6 @@ from .const import (
     EVENT_TYPE_DOORBELL,
     EVENT_TYPE_HIJACK,
     PULSE_RESET_SECONDS,
-    UPDATE_INTERVAL_SECONDS,
 )
 from .tuya_api import TuyaCloudApi
 
@@ -56,6 +56,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         api: TuyaCloudApi,
         device_id: str,
+        update_interval_seconds: int = DEFAULT_UPDATE_INTERVAL_SECONDS,
     ) -> None:
         self.api = api
         self.device_id = device_id
@@ -81,7 +82,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=UPDATE_INTERVAL_SECONDS),
+            update_interval=timedelta(seconds=update_interval_seconds),
         )
 
     def register_event_entities(self, entities: list["SlceEventEntity"]) -> None:

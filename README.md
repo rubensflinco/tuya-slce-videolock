@@ -12,10 +12,10 @@ Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores de stat
 |------------|--------|------------------|
 | Destrancar / trancar | ✅ Cloud ticket (`password-ticket` → `door-operate`) | [tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT) |
 | PIN de destrave remoto (4 dígitos) | ✅ Definido no setup; hash PBKDF2; teclado nativo do HA | `LockEntity.code_format` |
-| Bateria, online, campainha, last_* | ✅ Polling Cloud (~60 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
+| Bateria, online, campainha, last_* | ✅ Polling Cloud configurável (padrão **60 s**, min 1 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
 | Stream da câmera | ✅ Sharing + `stream/actions/allocate` (RTSP/HLS) + ffmpeg | Docs Tuya; comportamento estudado em [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **não copiado**) — ver [`docs/camera-todo.md`](docs/camera-todo.md) |
 
-Versão atual: **0.6.0**.
+Versão atual: **0.7.0**.
 
 Câmera: tenta primeiro o stream da integração oficial **Tuya** (sessão Smart Life, como o Xtend — sem trial). Fallback OpenAPI só se precisar; nesse caso o trial **IoT Video Live Stream** é grátis no portal (não dá para o addon “clicar” isso com Access ID/Secret). Detalhes: [`docs/camera-todo.md`](docs/camera-todo.md).
 
@@ -46,11 +46,19 @@ Device RuGiu de referência: `eba0b0f3d9b38977ed8b0a` — ver [`docs/device-sl-c
 2. Garantir **ffmpeg** disponível no HA (a integração declara dependência)
 3. Reiniciar o Home Assistant
 4. **Settings → Devices & Services → Add Integration → Tuya SL-CE Videolock**
-5. Informar Access ID / Secret / região, escolher a fechadura e definir a **senha de 4 dígitos** de destrave remoto
+5. Informar Access ID / Secret / região, escolher a fechadura, definir a **senha de 4 dígitos** e o **intervalo de polling** (padrão 60 s)
 
 ### HACS
 
 Repositório custom: `rubensflinco/tuya-slce-videolock` como Integration.
+
+## Intervalo de polling
+
+No setup (e depois em **Configurar** da integração) você escolhe de quantos em quantos segundos o HA consulta a Cloud Tuya.
+
+- Padrão: **60 s**
+- Faixa: **1–600 s**
+- Valores muito baixos (ex.: 1 s) deixam campainha/last_* mais ágeis, mas cada poll faz várias chamadas — a Tuya pode rate-limitar
 
 ## Senha de destrave remoto
 

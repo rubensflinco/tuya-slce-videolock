@@ -39,10 +39,10 @@ custom_components/slce_videolock/
   __init__.py
   manifest.json
   const.py
-  config_flow.py          # credenciais → device → PIN 4 dígitos (imutável)
+  config_flow.py          # credenciais → device → PIN → poll interval (+ options)
   pin.py                  # PBKDF2 hash/verify do unlock PIN
   tuya_api.py             # ticket unlock + status (MIT refs)
-  coordinator.py          # cloud poll ~60s
+  coordinator.py          # cloud poll (intervalo configurável, default 60s)
   entity.py               # DeviceInfo (DOMAIN, device_id)
   lock.py                 # ticket unlock/lock + code_format (PIN)
   camera.py               # stub — ver docs/camera-todo.md (GPL xtend)
@@ -54,6 +54,7 @@ custom_components/slce_videolock/
 
 Unlock real = Cloud ticket (`TICKET_ENDPOINT` → `DOOR_OPERATE_ENDPOINT`), nunca LAN.
 PIN remoto = definido só no config flow; `lock.code_format = ^\d{4}$`; validar hash em `async_unlock`.
+Poll = `options.update_interval` (1–600s, default 60); OptionsFlow permite mudar sem reinstall.
 Câmera: não copiar código GPL do xtend_tuya; implementar allocate OpenAPI depois.
 
 ## Device ID de teste (RuGiu)

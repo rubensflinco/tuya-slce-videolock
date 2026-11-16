@@ -1,4 +1,4 @@
-"""Config flow: credentials → pick lock → set unlock PIN (immutable after setup)."""
+"""Config flow: credentials → lock → unlock PIN → poll interval."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
@@ -20,9 +21,13 @@ from .const import (
     CONF_UNLOCK_PIN_CONFIRM,
     CONF_UNLOCK_PIN_HASH,
     CONF_UNLOCK_PIN_SALT,
+    CONF_UPDATE_INTERVAL,
     DEFAULT_DEVICE_NAME,
     DEFAULT_REGION,
+    DEFAULT_UPDATE_INTERVAL_SECONDS,
     DOMAIN,
+    MAX_UPDATE_INTERVAL_SECONDS,
+    MIN_UPDATE_INTERVAL_SECONDS,
     REGION_LABELS,
     TUYA_PROJECT_URL,
 )
@@ -30,6 +35,17 @@ from .pin import hash_unlock_pin, is_valid_unlock_pin
 from .tuya_api import TuyaApiError, TuyaCloudApi, format_device_option
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _clamp_update_interval(raw: Any) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_UPDATE_INTERVAL_SECONDS
+    return max(
+        MIN_UPDATE_INTERVAL_SECONDS,
+        min(MAX_UPDATE_INTERVAL_SECONDS, value),
+    )
 
 _REGION_ALIASES: dict[str, str] = {
     "ay": "cn",
@@ -108,6 +124,22 @@ def _unlock_pin_schema() -> vol.Schema:
     )
 
 
+def _update_interval_schema(default: int) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(CONF_UPDATE_INTERVAL, default=default): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=MIN_UPDATE_INTERVAL_SECONDS,
+                    max=MAX_UPDATE_INTERVAL_SECONDS,
+                    step=1,
+                    unit_of_measurement="s",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+        }
+    )
+
+
 class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Credentials, then select lock — or type Device ID if discovery is empty."""
 
@@ -120,6 +152,17 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._devices: list[dict[str, Any]] = []
         self._device_id: str = ""
         self._device_name: str = DEFAULT_DEVICE_NAME
+        self._pin_salt: str = ""
+        self._pin_hash: str = ""
+        self._update_interval: int = DEFAULT_UPDATE_INTERVAL_SECONDS
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Expose poll-interval options (PIN stays immutable)."""
+        return SlceVideolockOptionsFlow()
 
     async def async_step_user(self, user_input: dict | None = None):
         """Step 1: Access ID, Secret and region."""
@@ -251,17 +294,38 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_UNLOCK_PIN_CONFIRM] = "pin_mismatch"
             else:
                 salt, digest = hash_unlock_pin(pin)
-                return await self._async_finish(
-                    self._device_id,
-                    self._device_name,
-                    pin_salt=salt,
-                    pin_hash=digest,
-                )
+                self._pin_salt = salt
+                self._pin_hash = digest
+                return await self.async_step_polling()
 
         return self.async_show_form(
             step_id="unlock_pin",
             data_schema=_unlock_pin_schema(),
             errors=errors,
+        )
+
+    async def async_step_polling(self, user_input: dict | None = None):
+        """Step 4: cloud poll interval (default 60s, min 1s)."""
+        if user_input is not None:
+            self._update_interval = _clamp_update_interval(
+                user_input.get(CONF_UPDATE_INTERVAL)
+            )
+            return await self._async_finish(
+                self._device_id,
+                self._device_name,
+                pin_salt=self._pin_salt,
+                pin_hash=self._pin_hash,
+                update_interval=self._update_interval,
+            )
+
+        return self.async_show_form(
+            step_id="polling",
+            data_schema=_update_interval_schema(DEFAULT_UPDATE_INTERVAL_SECONDS),
+            description_placeholders={
+                "default_seconds": str(DEFAULT_UPDATE_INTERVAL_SECONDS),
+                "min_seconds": str(MIN_UPDATE_INTERVAL_SECONDS),
+                "max_seconds": str(MAX_UPDATE_INTERVAL_SECONDS),
+            },
         )
 
     async def _async_finish(
@@ -271,6 +335,7 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         *,
         pin_salt: str,
         pin_hash: str,
+        update_interval: int,
     ):
         """Create config entry after unique-id checks + soft remote-unlock warn."""
         await self.async_set_unique_id(device_id)
@@ -304,5 +369,42 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_DEVICE_NAME: name,
                 CONF_UNLOCK_PIN_SALT: pin_salt,
                 CONF_UNLOCK_PIN_HASH: pin_hash,
+            },
+            options={
+                CONF_UPDATE_INTERVAL: update_interval,
+            },
+        )
+
+
+class SlceVideolockOptionsFlow(config_entries.OptionsFlow):
+    """Allow changing poll interval after setup (not the unlock PIN)."""
+
+    async def async_step_init(self, user_input: dict | None = None):
+        """Manage options."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_UPDATE_INTERVAL: _clamp_update_interval(
+                        user_input.get(CONF_UPDATE_INTERVAL)
+                    ),
+                },
+            )
+
+        current = _clamp_update_interval(
+            self.config_entry.options.get(
+                CONF_UPDATE_INTERVAL,
+                self.config_entry.data.get(
+                    CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL_SECONDS
+                ),
+            )
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_update_interval_schema(current),
+            description_placeholders={
+                "default_seconds": str(DEFAULT_UPDATE_INTERVAL_SECONDS),
+                "min_seconds": str(MIN_UPDATE_INTERVAL_SECONDS),
+                "max_seconds": str(MAX_UPDATE_INTERVAL_SECONDS),
             },
         )
