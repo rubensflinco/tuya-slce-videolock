@@ -16,5 +16,5 @@
     "custom_components.slce_videolock"
   ],
   "requirements": [],
-  "version": "0.5.3"
+  "version": "0.6.0"
 }

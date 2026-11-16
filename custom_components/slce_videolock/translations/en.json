@@ -34,6 +34,18 @@
         "data_description": {
           "device_id": "Tuya device id (letters/numbers, e.g. eba0…)."
         }
+      },
+      "unlock_pin": {
+        "title": "Remote unlock PIN",
+        "description": "Set a **4-digit numeric PIN** required before unlocking this lock from Home Assistant.\n\nThe PIN is stored as a one-way hash (not recoverable). **It cannot be changed later** — to use a new PIN, remove this integration and add it again.",
+        "data": {
+          "unlock_pin": "Unlock PIN (4 digits)",
+          "unlock_pin_confirm": "Confirm PIN"
+        },
+        "data_description": {
+          "unlock_pin": "Exactly four digits (0–9). Required every time someone unlocks remotely in HA.",
+          "unlock_pin_confirm": "Type the same PIN again."
+        }
       }
     },
     "abort": {
@@ -43,7 +55,17 @@
       "cannot_connect": "Could not reach Tuya Cloud — check region and network",
       "invalid_auth": "Invalid Access ID/Secret, or wrong region",
       "device_not_found": "Selected device is invalid — go back and try again",
-      "no_compatible_devices": "No videolock / smart lock found in this project. Link the Smart Life account and confirm the device category is supported."
+      "no_compatible_devices": "No videolock / smart lock found in this project. Link the Smart Life account and confirm the device category is supported.",
+      "invalid_pin": "PIN must be exactly 4 digits (0–9)",
+      "pin_mismatch": "PIN confirmation does not match"
+    }
+  },
+  "exceptions": {
+    "invalid_unlock_pin": {
+      "message": "Incorrect unlock PIN."
+    },
+    "unlock_pin_not_configured": {
+      "message": "Unlock PIN is not configured. Remove and re-add the integration to set one."
     }
   }
 }

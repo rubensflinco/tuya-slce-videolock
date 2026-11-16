@@ -10,6 +10,12 @@ CONF_DEVICE_ID = "device_id"
 CONF_REGION = "region"
 CONF_DEVICE_NAME = "device_name"
 CONF_STREAM_TYPE = "stream_type"
+# Unlock PIN — only set at config time; stored as PBKDF2 salt+hash (never plaintext)
+CONF_UNLOCK_PIN = "unlock_pin"
+CONF_UNLOCK_PIN_CONFIRM = "unlock_pin_confirm"
+CONF_UNLOCK_PIN_SALT = "unlock_pin_salt"
+CONF_UNLOCK_PIN_HASH = "unlock_pin_hash"
+UNLOCK_PIN_CODE_FORMAT = r"^\d{4}$"
 
 # Production RuGiu device (docs/device-sl-ce.md)
 DEFAULT_DEVICE_ID = "eba0b0f3d9b38977ed8b0a"

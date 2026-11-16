@@ -1,22 +1,32 @@
-"""Lock platform — Cloud ticket unlock/lock."""
+"""Lock platform — Cloud ticket unlock/lock with local unlock PIN gate."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 import aiohttp
 
 from homeassistant.components.lock import LockEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import ATTR_CODE
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DEFAULT_AUTO_LOCK_DELAY, DOMAIN
+from .const import (
+    CONF_UNLOCK_PIN_HASH,
+    CONF_UNLOCK_PIN_SALT,
+    DEFAULT_AUTO_LOCK_DELAY,
+    DOMAIN,
+    UNLOCK_PIN_CODE_FORMAT,
+)
 from .coordinator import SlceVideolockCoordinator
 from .device import build_device_info
+from .pin import verify_unlock_pin
 from .tuya_api import TuyaCloudApi
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,7 +48,7 @@ async def async_setup_entry(
         auto_lock = DEFAULT_AUTO_LOCK_DELAY
 
     async_add_entities(
-        [SlceVideolockLock(coordinator, api, device_id, auto_lock)],
+        [SlceVideolockLock(coordinator, api, device_id, auto_lock, entry)],
         True,
     )
 
@@ -49,6 +59,7 @@ class SlceVideolockLock(CoordinatorEntity[SlceVideolockCoordinator], LockEntity)
     _attr_has_entity_name = True
     _attr_name = None
     _attr_should_poll = False
+    _attr_code_format = UNLOCK_PIN_CODE_FORMAT
 
     def __init__(
         self,
@@ -56,11 +67,13 @@ class SlceVideolockLock(CoordinatorEntity[SlceVideolockCoordinator], LockEntity)
         api: TuyaCloudApi,
         device_id: str,
         auto_lock_time: int,
+        entry: ConfigEntry,
     ) -> None:
         super().__init__(coordinator)
         self._api = api
         self._device_id = device_id
         self._auto_lock_time = auto_lock_time
+        self._entry = entry
         self._attr_unique_id = f"{device_id}_lock"
         self._attr_is_locked = True
         self._attr_is_locking = False
@@ -70,6 +83,21 @@ class SlceVideolockLock(CoordinatorEntity[SlceVideolockCoordinator], LockEntity)
         if coordinator.data:
             name = coordinator.data.get("name")
         self._attr_device_info = build_device_info(device_id, name)
+
+    def _require_unlock_pin(self, code: str | None) -> None:
+        """Raise if the remote unlock PIN is missing or incorrect."""
+        salt = self._entry.data.get(CONF_UNLOCK_PIN_SALT)
+        digest = self._entry.data.get(CONF_UNLOCK_PIN_HASH)
+        if not salt or not digest:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unlock_pin_not_configured",
+            )
+        if not verify_unlock_pin(code, salt, digest):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_unlock_pin",
+            )
 
     async def async_update(self) -> None:
         """Refresh lock state from cloud."""
@@ -90,7 +118,9 @@ class SlceVideolockLock(CoordinatorEntity[SlceVideolockCoordinator], LockEntity)
         self._attr_is_locked = not state
         self._attr_available = True
 
-    async def async_unlock(self, **kwargs) -> None:
+    async def async_unlock(self, **kwargs: Any) -> None:
+        """Unlock only after the configured 4-digit PIN is validated."""
+        self._require_unlock_pin(kwargs.get(ATTR_CODE))
         self._attr_is_unlocking = True
         self.async_write_ha_state()
         success = await self._api.async_unlock(self._device_id)
@@ -101,7 +131,8 @@ class SlceVideolockLock(CoordinatorEntity[SlceVideolockCoordinator], LockEntity)
             self._schedule_verification(self._auto_lock_time + 1)
         self.async_write_ha_state()
 
-    async def async_lock(self, **kwargs) -> None:
+    async def async_lock(self, **kwargs: Any) -> None:
+        """Lock without PIN check (code_format may still prompt in the UI)."""
         self._attr_is_locking = True
         self.async_write_ha_state()
         success = await self._api.async_lock(self._device_id)

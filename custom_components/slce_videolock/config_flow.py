@@ -1,4 +1,4 @@
-"""Config flow: credentials → pick lock (or enter Device ID manually)."""
+"""Config flow: credentials → pick lock → set unlock PIN (immutable after setup)."""
 
 from __future__ import annotations
 
@@ -16,12 +16,17 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_DEVICE_NAME,
     CONF_REGION,
+    CONF_UNLOCK_PIN,
+    CONF_UNLOCK_PIN_CONFIRM,
+    CONF_UNLOCK_PIN_HASH,
+    CONF_UNLOCK_PIN_SALT,
     DEFAULT_DEVICE_NAME,
     DEFAULT_REGION,
     DOMAIN,
     REGION_LABELS,
     TUYA_PROJECT_URL,
 )
+from .pin import hash_unlock_pin, is_valid_unlock_pin
 from .tuya_api import TuyaApiError, TuyaCloudApi, format_device_option
 
 _LOGGER = logging.getLogger(__name__)
@@ -90,6 +95,19 @@ def _manual_schema() -> vol.Schema:
     )
 
 
+def _unlock_pin_schema() -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(CONF_UNLOCK_PIN): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+            ),
+            vol.Required(CONF_UNLOCK_PIN_CONFIRM): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+            ),
+        }
+    )
+
+
 class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Credentials, then select lock — or type Device ID if discovery is empty."""
 
@@ -100,6 +118,8 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._access_secret: str = ""
         self._region: str = DEFAULT_REGION
         self._devices: list[dict[str, Any]] = []
+        self._device_id: str = ""
+        self._device_name: str = DEFAULT_DEVICE_NAME
 
     async def async_step_user(self, user_input: dict | None = None):
         """Step 1: Access ID, Secret and region."""
@@ -163,7 +183,9 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "device_not_found"
             else:
                 name = str(match.get("name") or "").strip() or DEFAULT_DEVICE_NAME
-                return await self._async_finish(device_id, name)
+                self._device_id = device_id
+                self._device_name = name
+                return await self.async_step_unlock_pin()
 
         return self.async_show_form(
             step_id="select_device",
@@ -203,7 +225,9 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 finally:
                     await api.async_close()
                 if not errors:
-                    return await self._async_finish(device_id, name)
+                    self._device_id = device_id
+                    self._device_name = name
+                    return await self.async_step_unlock_pin()
 
         return self.async_show_form(
             step_id="manual_device",
@@ -214,7 +238,40 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def _async_finish(self, device_id: str, name: str):
+    async def async_step_unlock_pin(self, user_input: dict | None = None):
+        """Step 3: set immutable 4-digit remote unlock PIN (hashed at rest)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            pin = str(user_input.get(CONF_UNLOCK_PIN) or "").strip()
+            confirm = str(user_input.get(CONF_UNLOCK_PIN_CONFIRM) or "").strip()
+            if not is_valid_unlock_pin(pin):
+                errors[CONF_UNLOCK_PIN] = "invalid_pin"
+            elif pin != confirm:
+                errors[CONF_UNLOCK_PIN_CONFIRM] = "pin_mismatch"
+            else:
+                salt, digest = hash_unlock_pin(pin)
+                return await self._async_finish(
+                    self._device_id,
+                    self._device_name,
+                    pin_salt=salt,
+                    pin_hash=digest,
+                )
+
+        return self.async_show_form(
+            step_id="unlock_pin",
+            data_schema=_unlock_pin_schema(),
+            errors=errors,
+        )
+
+    async def _async_finish(
+        self,
+        device_id: str,
+        name: str,
+        *,
+        pin_salt: str,
+        pin_hash: str,
+    ):
         """Create config entry after unique-id checks + soft remote-unlock warn."""
         await self.async_set_unique_id(device_id)
         self._abort_if_unique_id_configured()
@@ -245,5 +302,7 @@ class SlceVideolockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_REGION: self._region,
                 CONF_DEVICE_ID: device_id,
                 CONF_DEVICE_NAME: name,
+                CONF_UNLOCK_PIN_SALT: pin_salt,
+                CONF_UNLOCK_PIN_HASH: pin_hash,
             },
         )

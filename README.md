@@ -11,10 +11,11 @@ Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores de stat
 | Capacidade | Status | Origem do padrão |
 |------------|--------|------------------|
 | Destrancar / trancar | ✅ Cloud ticket (`password-ticket` → `door-operate`) | [tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT) |
+| PIN de destrave remoto (4 dígitos) | ✅ Definido no setup; hash PBKDF2; teclado nativo do HA | `LockEntity.code_format` |
 | Bateria, online, campainha, last_* | ✅ Polling Cloud (~60 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
 | Stream da câmera | ✅ Sharing + `stream/actions/allocate` (RTSP/HLS) + ffmpeg | Docs Tuya; comportamento estudado em [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **não copiado**) — ver [`docs/camera-todo.md`](docs/camera-todo.md) |
 
-Versão atual: **0.4.7**.
+Versão atual: **0.6.0**.
 
 Câmera: tenta primeiro o stream da integração oficial **Tuya** (sessão Smart Life, como o Xtend — sem trial). Fallback OpenAPI só se precisar; nesse caso o trial **IoT Video Live Stream** é grátis no portal (não dá para o addon “clicar” isso com Access ID/Secret). Detalhes: [`docs/camera-todo.md`](docs/camera-todo.md).
 
@@ -45,11 +46,19 @@ Device RuGiu de referência: `eba0b0f3d9b38977ed8b0a` — ver [`docs/device-sl-c
 2. Garantir **ffmpeg** disponível no HA (a integração declara dependência)
 3. Reiniciar o Home Assistant
 4. **Settings → Devices & Services → Add Integration → Tuya SL-CE Videolock**
-5. Informar Access ID / Secret / Device ID / região
+5. Informar Access ID / Secret / região, escolher a fechadura e definir a **senha de 4 dígitos** de destrave remoto
 
 ### HACS
 
 Repositório custom: `rubensflinco/tuya-slce-videolock` como Integration.
+
+## Senha de destrave remoto
+
+No setup da integração você define um **PIN numérico de 4 dígitos**. O Home Assistant passa a pedir esse código antes de destrancar (teclado nativo da entidade `lock`).
+
+- A senha **não** fica em texto puro: só salt + hash PBKDF2-SHA256 no `config_entry`
+- **Não há tela para alterar** a senha depois. Para trocar: remova a integração e adicione de novo
+- Instalações antigas (sem PIN) precisam ser removidas e recriadas para ativar a proteção
 
 ## Entidades (mesmo device)
 

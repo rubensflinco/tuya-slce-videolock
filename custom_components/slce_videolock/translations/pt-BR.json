@@ -34,6 +34,18 @@
         "data_description": {
           "device_id": "ID Tuya do device (letras/números, ex.: eba0…)."
         }
+      },
+      "unlock_pin": {
+        "title": "Senha de destrave remoto",
+        "description": "Defina uma **senha numérica de 4 dígitos** exigida antes de destrancar esta fechadura pelo Home Assistant.\n\nA senha é guardada como hash unidirecional (não dá para recuperar). **Não é possível alterar depois** — para trocar a senha, remova a integração e adicione de novo.",
+        "data": {
+          "unlock_pin": "Senha (4 dígitos)",
+          "unlock_pin_confirm": "Confirmar senha"
+        },
+        "data_description": {
+          "unlock_pin": "Exatamente quatro dígitos (0–9). Pedida toda vez que alguém destranca remotamente no HA.",
+          "unlock_pin_confirm": "Digite a mesma senha novamente."
+        }
       }
     },
     "abort": {
@@ -43,7 +55,17 @@
       "cannot_connect": "Não foi possível falar com a Cloud Tuya — confira região e rede",
       "invalid_auth": "Access ID/Secret inválidos, ou região errada",
       "device_not_found": "Dispositivo inválido — volte e tente de novo",
-      "no_compatible_devices": "Nenhuma fechadura/videolock encontrada neste projeto. Vincule a conta Smart Life e confira se a categoria do device é suportada."
+      "no_compatible_devices": "Nenhuma fechadura/videolock encontrada neste projeto. Vincule a conta Smart Life e confira se a categoria do device é suportada.",
+      "invalid_pin": "A senha deve ter exatamente 4 dígitos (0–9)",
+      "pin_mismatch": "A confirmação da senha não confere"
+    }
+  },
+  "exceptions": {
+    "invalid_unlock_pin": {
+      "message": "Senha de destrave incorreta."
+    },
+    "unlock_pin_not_configured": {
+      "message": "Senha de destrave não configurada. Remova e adicione a integração novamente para definir uma."
     }
   }
 }
