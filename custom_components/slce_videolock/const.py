@@ -19,12 +19,25 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_SNAPSHOT_RETENTION_DAYS = "snapshot_retention_days"
 UNLOCK_PIN_CODE_FORMAT = r"^\d{4}$"
 
-# Doorbell camera snapshots (gallery + last-image entity)
+# Camera snapshots on doorbell / unlock / alarm (gallery + last-image entities)
 DEFAULT_SNAPSHOT_RETENTION_DAYS = 30
 MIN_SNAPSHOT_RETENTION_DAYS = 1
 MAX_SNAPSHOT_RETENTION_DAYS = 365
 SNAPSHOT_SUBDIR = "slce_videolock"
 SNAPSHOT_HTTP_URL_PREFIX = "/api/slce_videolock"
+SNAPSHOT_KIND_DOORBELL = "doorbell"
+SNAPSHOT_KIND_UNLOCK = "unlock"
+SNAPSHOT_KIND_ALARM = "alarm"
+SNAPSHOT_KINDS: tuple[str, ...] = (
+    SNAPSHOT_KIND_DOORBELL,
+    SNAPSHOT_KIND_UNLOCK,
+    SNAPSHOT_KIND_ALARM,
+)
+SNAPSHOT_KIND_LABELS: dict[str, str] = {
+    SNAPSHOT_KIND_DOORBELL: "Campainha",
+    SNAPSHOT_KIND_UNLOCK: "Acesso liberado",
+    SNAPSHOT_KIND_ALARM: "Alarme de segurança",
+}
 
 
 def clamp_retention_days(raw: object) -> int:

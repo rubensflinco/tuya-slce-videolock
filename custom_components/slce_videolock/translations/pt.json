@@ -59,7 +59,7 @@
       },
       "snapshots": {
         "title": "Retenção das fotos da campainha",
-        "description": "Quando alguém toca a campainha, a integração tira uma foto da câmera da fechadura.\n\nAs fotos aparecem em **Mídia → Tuya SL-CE Videolock** (galeria) e como **Última foto da campainha** no dispositivo. Em Atividades fica um registro de texto indicando onde ver.\n\nPadrão: **{default_days} dias**. Faixa: {min_days}–{max_days}. Arquivos mais antigos são apagados automaticamente.",
+        "description": "A integração tira uma foto da câmera da fechadura na **campainha**, em qualquer **liberação de acesso** e no **alarme de segurança**.\n\nAs fotos ficam em pastas separadas em **Mídia → Tuya SL-CE Videolock** (Campainha / Acesso liberado / Alarme) e em três entidades **Última foto** no dispositivo. Em Atividades fica um registro de texto indicando onde ver.\n\nPadrão: **{default_days} dias**. Faixa: {min_days}–{max_days}. Arquivos mais antigos são apagados automaticamente.",
         "data": {
           "snapshot_retention_days": "Guardar fotos por"
         },

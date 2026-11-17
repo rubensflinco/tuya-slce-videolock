@@ -14,9 +14,9 @@ Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores de stat
 | PIN de destrave remoto (4 dígitos) | ✅ Definido no setup; hash PBKDF2; teclado nativo do HA | `LockEntity.code_format` |
 | Bateria, online, campainha, last_* | ✅ Polling Cloud configurável (padrão **60 s**, min 1 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
 | Stream da câmera | ✅ Sharing + `stream/actions/allocate` (RTSP/HLS) + ffmpeg | Docs Tuya; comportamento estudado em [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **não copiado**) — ver [`docs/camera-todo.md`](docs/camera-todo.md) |
-| Foto na campainha + galeria | ✅ Snapshot na campainha; galeria em **Mídia**; retenção padrão **30 dias** (configurável); registro em Atividades | `image` + `media_source` |
+| Fotos + galeria | ✅ Snapshot em **campainha**, **acesso liberado** e **alarme**; pastas separadas em **Mídia**; retenção padrão **30 dias**; registro em Atividades | `image` + `media_source` |
 
-Versão atual: **0.7.2**.
+Versão atual: **0.8.0**.
 
 Câmera: tenta primeiro o stream da integração oficial **Tuya** (sessão Smart Life, como o Xtend — sem trial). Fallback OpenAPI só se precisar; nesse caso o trial **IoT Video Live Stream** é grátis no portal (não dá para o addon “clicar” isso com Access ID/Secret). Detalhes: [`docs/camera-todo.md`](docs/camera-todo.md).
 
@@ -61,14 +61,19 @@ No setup (e depois em **Configurar** da integração) você escolhe de quantos e
 - Faixa: **1–600 s**
 - Valores muito baixos (ex.: 1 s) deixam campainha/last_* mais ágeis, mas cada poll faz várias chamadas — a Tuya pode rate-limitar
 
-## Fotos da campainha
+## Fotos (campainha / acesso / alarme)
 
-Ao tocar a campainha, a integração tira uma foto da câmera da fechadura:
+A integração tira uma foto da câmera da fechadura quando:
 
-- **Última foto** — entidade `image` no device («Última foto da campainha»)
-- **Galeria** — menu lateral **Mídia → Tuya SL-CE Videolock** (todas as fotos ainda não apagadas)
-- **Atividades** — registro de texto *«Campainha — foto»* indicando onde ver (o painel Atividades do HA **não** embute a imagem; o URI `media-source://slce_videolock/…` fica na mensagem)
-- **Retenção** — padrão **30 dias** (1–365), escolhido no setup e em **Configurar**; depois disso os arquivos são apagados sozinhos
+| Evento | Pasta na galeria | Entidade |
+|--------|------------------|----------|
+| Campainha | **Campainha** | Última foto — Campainha |
+| Qualquer liberação de acesso (digital, senha, face, app, chave…) | **Acesso liberado** | Última foto — Acesso liberado |
+| Alarme de segurança (incl. coação) | **Alarme de segurança** | Última foto — Alarme |
+
+- **Galeria** — **Mídia → Tuya SL-CE Videolock →** pasta do tipo de evento
+- **Atividades** — registro de texto (*«Campainha — foto»*, *«Acesso liberado — foto»*, *«Alarme de segurança — foto»*) com o caminho da galeria (o painel Atividades **não** embute a imagem)
+- **Retenção** — padrão **30 dias** (1–365), no setup e em **Configurar**; arquivos mais antigos são apagados sozinhos
 
 ## Senha de destrave remoto
 
@@ -88,8 +93,8 @@ Identificador no registry: `(slce_videolock, <device_id>)`.
 | `sensor` | Bateria, last fingerprint/password/card, app unlocks, temporary codes, last alarm, pedidos / last contact |
 | `binary_sensor` | Online, Campainha, Alerta de coação |
 | `camera` | Stream via allocate + snapshot ffmpeg |
-| `image` | Última foto da campainha |
-| Media Browser | Galeria das fotos retidas (`media-source://slce_videolock/…`) |
+| `image` | Última foto — Campainha / Acesso liberado / Alarme |
+| Media Browser | Pastas Campainha, Acesso liberado, Alarme de segurança |
 
 ## Testar câmera no HAOS
 

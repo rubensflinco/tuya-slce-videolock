@@ -32,12 +32,15 @@ from .const import (
     EVENT_TYPE_DOORBELL,
     EVENT_TYPE_HIJACK,
     PULSE_RESET_SECONDS,
+    SNAPSHOT_KIND_ALARM,
+    SNAPSHOT_KIND_DOORBELL,
+    SNAPSHOT_KIND_UNLOCK,
 )
 from .tuya_api import TuyaCloudApi
 
 if TYPE_CHECKING:
     from .event import SlceEventEntity
-    from .snapshots import DoorbellSnapshotGallery
+    from .snapshots import SnapshotGallery
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,7 +65,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.api = api
         self.device_id = device_id
         self._event_entities: dict[str, "SlceEventEntity"] = {}
-        self._snapshot_gallery: DoorbellSnapshotGallery | None = None
+        self._snapshot_gallery: SnapshotGallery | None = None
         self._last_event_timestamp_ms: int = 0
         self._last_status_snapshot: dict[str, Any] = {}
         self._pending_resets: dict[str, asyncio.TimerHandle | None] = {}
@@ -92,17 +95,21 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for entity in entities:
             self._event_entities[entity.event_key] = entity
 
-    def set_snapshot_gallery(self, gallery: DoorbellSnapshotGallery) -> None:
-        """Attach doorbell snapshot gallery (capture on ring)."""
+    def set_snapshot_gallery(self, gallery: SnapshotGallery) -> None:
+        """Attach snapshot gallery (doorbell / unlock / alarm)."""
         self._snapshot_gallery = gallery
 
     @callback
-    def _schedule_doorbell_snapshot(self) -> None:
+    def _schedule_snapshot(
+        self, kind: str, *, detail: str | None = None
+    ) -> None:
         """Fire-and-forget still capture so poll cycle is not blocked."""
         gallery = self._snapshot_gallery
         if gallery is None:
             return
-        self.hass.async_create_task(gallery.async_capture_doorbell())
+        self.hass.async_create_task(
+            gallery.async_capture(kind, detail=detail)
+        )
 
     @callback
     def _schedule_pulse_reset(self, dp_key: str) -> None:
@@ -155,7 +162,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._last_doorbell_ts = now_ms
                 self._event_counts["doorbell"] += 1
                 self._fire_event("doorbell_event", EVENT_TYPE_DOORBELL)
-                self._schedule_doorbell_snapshot()
+                self._schedule_snapshot(SNAPSHOT_KIND_DOORBELL)
                 _LOGGER.info("Doorbell event detected (rising edge)")
                 self._schedule_pulse_reset(DP_DOORBELL)
         elif doorbell_val is False:
@@ -171,6 +178,9 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._hijack_armed = False
                 self._event_counts["hijack"] += 1
                 self._fire_event("alarm_event", EVENT_TYPE_HIJACK)
+                self._schedule_snapshot(
+                    SNAPSHOT_KIND_ALARM, detail=EVENT_TYPE_HIJACK
+                )
                 _LOGGER.warning("Hijack/duress event detected!")
                 self._schedule_pulse_reset(DP_HIJACK)
         elif hijack_val is False:
@@ -186,6 +196,9 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._event_counts["alarm"] += 1
                 alarm_type = str(alarm_val).lower().replace(" ", "_")
                 self._fire_event("alarm_event", alarm_type, {"alarm_type": alarm_val})
+                self._schedule_snapshot(
+                    SNAPSHOT_KIND_ALARM, detail=alarm_type
+                )
                 _LOGGER.warning("Alarm event (status change): %s", alarm_val)
 
         # Unlock DPs: only real changes after baseline (skip bootstrap).
@@ -202,6 +215,9 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "unlock_event",
                         method,
                         {"method": method, "value": new_val, "dp_code": dp_code},
+                    )
+                    self._schedule_snapshot(
+                        SNAPSHOT_KIND_UNLOCK, detail=method
                     )
                     _LOGGER.info("Unlock event: %s = %s", dp_code, new_val)
 
@@ -263,7 +279,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "timestamp": ts,
                 "record_id": event.get("record_id"),
             })
-            self._schedule_doorbell_snapshot()
+            self._schedule_snapshot(SNAPSHOT_KIND_DOORBELL)
             self._schedule_pulse_reset(DP_DOORBELL)
             _LOGGER.info("Doorbell event from records (ts=%s)", ts)
 
@@ -298,6 +314,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "record_id": event.get("record_id"),
                 },
             )
+            self._schedule_snapshot(SNAPSHOT_KIND_UNLOCK, detail=method)
             _LOGGER.info("Unlock event from records: %s (ts=%s)", method, ts)
 
         for event in alarm_events:
@@ -324,6 +341,7 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "record_id": event.get("record_id"),
                 },
             )
+            self._schedule_snapshot(SNAPSHOT_KIND_ALARM, detail=alarm_type)
             _LOGGER.warning(
                 "Alarm event from logs: %s (ts=%s source=%s)",
                 alarm_type,

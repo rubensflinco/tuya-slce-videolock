@@ -59,7 +59,7 @@
       },
       "snapshots": {
         "title": "Doorbell photo retention",
-        "description": "When someone rings the doorbell, the integration saves a still from the lock camera.\n\nPhotos appear in **Media → Tuya SL-CE Videolock** (gallery) and as **Last doorbell photo** on the device. Activity logs a text entry pointing there.\n\nDefault: **{default_days} days**. Range: {min_days}–{max_days}. Older files are deleted automatically.",
+        "description": "The integration saves a still from the lock camera on **doorbell**, **unlock/access**, and **security alarm**.\n\nPhotos are filed in separate Media Browser folders (Campainha / Acesso liberado / Alarme) and as three **Last photo** entities on the device. Activity logs a text entry pointing there.\n\nDefault: **{default_days} days**. Range: {min_days}–{max_days}. Older files are deleted automatically.",
         "data": {
           "snapshot_retention_days": "Keep photos for"
         },

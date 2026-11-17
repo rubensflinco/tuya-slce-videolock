@@ -30,7 +30,7 @@ from .const import (
 )
 from .coordinator import SlceVideolockCoordinator
 from .snapshots import (
-    DoorbellSnapshotGallery,
+    SnapshotGallery,
     register_snapshot_http_views,
 )
 from .tuya_api import TuyaCloudApi
@@ -91,7 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = SlceVideolockCoordinator(
         hass, api, device_id, update_interval_seconds=update_interval
     )
-    gallery = DoorbellSnapshotGallery(
+    gallery = SnapshotGallery(
         hass,
         api=api,
         device_id=device_id,
