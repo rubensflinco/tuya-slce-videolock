@@ -53,10 +53,11 @@ Marketplace usa **GitHub Release** + ZIP. Catálogo ~4–6 h; repo custom até ~
   "zip_release": true,
   "filename": "slce_videolock.zip",
   "render_readme": true,
-  "country": "BR",
   "homeassistant": "2024.8.0"
 }
 ```
+
+Sem `country`: o catálogo mostra o repo no mundo todo (melhor descoberta). Só use `country` se quiser filtrar por país.
 
 ## Zip — formato crítico
 

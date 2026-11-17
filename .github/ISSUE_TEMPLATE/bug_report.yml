@@ -1,0 +1,51 @@
+name: Bug report
+description: Report something that does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve **Tuya SL-CE Videolock**. Fill every section you can.
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      description: From the GitHub release or `manifest.json` (e.g. 0.8.0)
+      placeholder: "0.8.0"
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.11.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install?
+      options:
+        - Marketplace / HACS
+        - Custom repository
+        - Manual copy
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Expected vs actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Settings → System → Logs, filter `slce_videolock` (remove secrets)
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Device / region
+      description: Lock model (e.g. SL-CE), Tuya category (`videolock`), cloud region (`us`/`eu`/`cn`/`in`)

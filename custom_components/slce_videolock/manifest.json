@@ -1,6 +1,11 @@
 {
   "domain": "slce_videolock",
   "name": "Tuya SL-CE Videolock",
+  "categories": [
+    "security_safety.locks_access",
+    "security_safety.cameras",
+    "security_safety.doorbells_intercoms"
+  ],
   "codeowners": [
     "@rubensflinco"
   ],

@@ -1,108 +1,145 @@
-# Tuya SL-CE Videolock
+# Tuya SL-CE Videolock for Home Assistant
 
 <p align="center">
-  <img src="icon.png" alt="Tuya SL-CE Videolock logo" width="128" height="128">
+  <img src="icon.png" alt="Tuya SL-CE Videolock — Home Assistant smart lock camera integration" width="128" height="128">
 </p>
 
-Integração custom do **Home Assistant** para a **Fechadura Inteligente SL-CE (Wi-Fi)** (Novadigital / **Tuya** Smart Life — categoria `videolock`).
+<p align="center">
+  <strong>Home Assistant custom integration</strong> for the <strong>Novadigital / Tuya Fechadura SL-CE (Wi-Fi) videolock</strong> —
+  cloud unlock, live camera, doorbell photos, battery and sensors in <strong>one device</strong>.
+</p>
 
-Objetivo: **um único device** no HA com unlock Cloud (ticket), sensores de status e **stream de câmera** (OpenAPI allocate / Sharing).
+<p align="center">
+  <a href="https://github.com/rubensflinco/tuya-slce-videolock/releases/latest"><img src="https://img.shields.io/github/v/release/rubensflinco/tuya-slce-videolock?style=flat-square&label=release" alt="Latest release"></a>
+  <a href="https://github.com/rubensflinco/tuya-slce-videolock/blob/main/LICENSE"><img src="https://img.shields.io/github/license/rubensflinco/tuya-slce-videolock?style=flat-square" alt="MIT license"></a>
+  <a href="https://www.home-assistant.io/"><img src="https://img.shields.io/badge/Home%20Assistant-2024.8%2B-41BDF5?style=flat-square" alt="Home Assistant 2024.8+"></a>
+  <a href="https://hacs.xyz/"><img src="https://img.shields.io/badge/HACS-Custom-orange?style=flat-square" alt="HACS custom"></a>
+  <a href="https://github.com/rubensflinco/tuya-slce-videolock/actions/workflows/validate.yaml"><img src="https://img.shields.io/github/actions/workflow/status/rubensflinco/tuya-slce-videolock/validate.yaml?branch=main&style=flat-square&label=validate" alt="Validate"></a>
+</p>
 
-| Capacidade | Status | Origem do padrão |
-|------------|--------|------------------|
-| Destrancar / trancar | ✅ Cloud ticket (`password-ticket` → `door-operate`) | [tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT) |
-| PIN de destrave remoto (4 dígitos) | ✅ Definido no setup; hash PBKDF2; teclado nativo do HA | `LockEntity.code_format` |
-| Bateria, online, campainha, last_* | ✅ Polling Cloud configurável (padrão **60 s**, min 1 s) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
-| Stream da câmera | ✅ Sharing + `stream/actions/allocate` (RTSP/HLS) + ffmpeg | Docs Tuya; comportamento estudado em [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **não copiado**) — ver [`docs/camera-todo.md`](docs/camera-todo.md) |
-| Fotos + galeria | ✅ Snapshot em **campainha**, **acesso liberado** e **alarme**; pastas separadas em **Mídia**; retenção padrão **30 dias**; registro em Atividades | `image` + `media_source` |
+<p align="center">
+  <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=rubensflinco&repository=tuya-slce-videolock&category=integration"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open repository in Home Assistant Marketplace / HACS"></a>
+  &nbsp;
+  <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=slce_videolock"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Add Tuya SL-CE Videolock integration"></a>
+</p>
 
-Versão atual: **0.8.0**.
+**Keywords / busca:** Home Assistant · Tuya smart lock · videolock · Fechadura SL-CE · Novadigital · câmera na fechadura · doorbell · Remote Unlock · HACS · Marketplace
 
-Câmera: tenta primeiro o stream da integração oficial **Tuya** (sessão Smart Life, como o Xtend — sem trial). Fallback OpenAPI só se precisar; nesse caso o trial **IoT Video Live Stream** é grátis no portal (não dá para o addon “clicar” isso com Access ID/Secret). Detalhes: [`docs/camera-todo.md`](docs/camera-todo.md).
+Versão atual: **0.8.0**. Domain: `slce_videolock`. Licença: **MIT**.
 
-## Por que existe
+Agents and LLMs: see [`llms.txt`](llms.txt) for a machine-oriented summary.
 
-A integração oficial Tuya **não** expõe `lock`. Três addons cobrem pedaços diferentes e o HA **não** permite juntar entidades de integrações distintas no mesmo device via UI. Esta integração unifica o fluxo Cloud (ticket unlock + DPs + câmera).
+## What this solves
 
-**LAN / tuya_local:** fora de escopo — neste videolock o unlock local não funciona de forma confiável.
+The **official Tuya** Home Assistant integration does **not** expose a usable `lock` entity for this videolock. Other community projects cover only pieces (unlock *or* sensors *or* camera), and Home Assistant **cannot** merge entities from different integrations into one device in the UI.
 
-## Pré-requisitos (Tuya IoT)
+**Tuya SL-CE Videolock** is the all-in-one Cloud integration for the SL-CE Wi-Fi smart lock with camera:
 
-1. Conta em [platform.tuya.com](https://platform.tuya.com/) → projeto **Cloud** (método Smart Home)
-2. Vincular a conta **Smart Life / Tuya** (QR) para o device aparecer
-3. Autorizar serviços:
-   - **IoT Core**
-   - **Smart Lock Open Service** (trial ~6 meses — renovar quando expirar)
-   - **IoT Video Live Stream** (para a câmera)
-4. No app Smart Life: ativar **Remote Unlock / Unlock without password** na fechadura
-5. Anotar **Access ID**, **Access Secret**, **Device ID** e a **região** do data center (`us` / `eu` / `cn` / `in`)
+| Capability | Status | Pattern inspired by |
+|------------|--------|---------------------|
+| Unlock / lock | ✅ Cloud ticket (`password-ticket` → `door-operate`) | [tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT) |
+| Remote unlock PIN (4 digits) | ✅ Setup; PBKDF2 hash; native HA keypad | `LockEntity.code_format` |
+| Battery, online, doorbell, last_* | ✅ Configurable Cloud polling (default **60 s**) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
+| Camera stream | ✅ Sharing + `stream/actions/allocate` (RTSP/HLS) + ffmpeg | Tuya docs; behavior studied in [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **not copied**) |
+| Photos + gallery | ✅ Snapshot on **doorbell**, **access granted**, **alarm**; Media folders; retention **30 days** | `image` + `media_source` |
 
-Device RuGiu de referência: `eba0b0f3d9b38977ed8b0a` — ver [`docs/device-sl-ce.md`](docs/device-sl-ce.md).
+**LAN / `tuya_local`:** out of scope — local unlock on this videolock is not reliable.
 
-## Instalação
+Camera prefers the official **Tuya** session stream (like Xtend, no trial). OpenAPI allocate is fallback; IoT Video Live Stream trial is free in the Tuya portal. Details: [`docs/camera-todo.md`](docs/camera-todo.md).
+
+## Install
+
+### Marketplace / HACS (recommended)
+
+1. Open the badge above, or add custom repository `rubensflinco/tuya-slce-videolock` as **Integration**
+2. Download / install, restart if Home Assistant asks
+3. **Settings → Devices & Services → Add Integration → Tuya SL-CE Videolock**
+4. Enter Access ID / Secret / region, pick the lock, set the **4-digit PIN**, polling interval, and photo retention
+
+My links also work on HA **before** 2026.11 (HACS) and **after** (built-in Marketplace).
+
+Catalog listing (default search without custom URL) requires a PR to [`hacs/default`](https://github.com/hacs/default) — see [`docs/marketplace-catalog.md`](docs/marketplace-catalog.md). Until merged, use the My link above.
 
 ### Manual
 
-1. Copiar `custom_components/slce_videolock` para `/config/custom_components/`
-2. Garantir **ffmpeg** disponível no HA (a integração declara dependência)
-3. Reiniciar o Home Assistant
-4. **Settings → Devices & Services → Add Integration → Tuya SL-CE Videolock**
-5. Informar Access ID / Secret / região, escolher a fechadura, definir a **senha de 4 dígitos**, o **intervalo de polling** (padrão 60 s) e a **retenção das fotos da campainha** (padrão 30 dias)
+1. Copy `custom_components/slce_videolock` into `/config/custom_components/`
+2. Ensure **ffmpeg** is available (declared dependency)
+3. Restart Home Assistant and add the integration from the UI
 
-### HACS
+## Tuya IoT prerequisites
 
-Repositório custom: `rubensflinco/tuya-slce-videolock` como Integration.
+1. Account on [platform.tuya.com](https://platform.tuya.com/) → **Cloud** project (Smart Home method)
+2. Link the **Smart Life / Tuya** app account (QR) so the device appears
+3. Authorize:
+   - **IoT Core**
+   - **Smart Lock Open Service** (trial ~6 months — renew when it expires)
+   - **IoT Video Live Stream** (camera)
+4. In Smart Life: enable **Remote Unlock / Unlock without password**
+5. Note **Access ID**, **Access Secret**, **Device ID**, and data-center **region** (`us` / `eu` / `cn` / `in`)
 
-## Intervalo de polling
+Reference device sheet: [`docs/device-sl-ce.md`](docs/device-sl-ce.md).
 
-No setup (e depois em **Configurar** da integração) você escolhe de quantos em quantos segundos o HA consulta a Cloud Tuya.
+## Entities (same device)
 
-- Padrão: **60 s**
-- Faixa: **1–600 s**
-- Valores muito baixos (ex.: 1 s) deixam campainha/last_* mais ágeis, mas cada poll faz várias chamadas — a Tuya pode rate-limitar
+Registry id: `(slce_videolock, <device_id>)`.
 
-## Fotos (campainha / acesso / alarme)
+| Platform | Entities |
+|----------|----------|
+| `lock` | Lock (ticket unlock/lock + PIN) |
+| `sensor` | Battery, last fingerprint/password/card, app unlocks, temporary codes, last alarm, contact requests |
+| `binary_sensor` | Online, Doorbell, Duress alert |
+| `camera` | Live stream + ffmpeg snapshot |
+| `image` | Last photo — Doorbell / Access granted / Alarm |
+| Media Browser | Folders for each photo event type |
 
-A integração tira uma foto da câmera da fechadura quando:
+### Polling
 
-| Evento | Pasta na galeria | Entidade |
-|--------|------------------|----------|
-| Campainha | **Campainha** | Última foto — Campainha |
-| Qualquer liberação de acesso (digital, senha, face, app, chave…) | **Acesso liberado** | Última foto — Acesso liberado |
-| Alarme de segurança (incl. coação) | **Alarme de segurança** | Última foto — Alarme |
+- Default **60 s** · range **1–600 s** (setup / Configure)
+- Very low intervals make doorbell/`last_*` snappier but may hit Tuya rate limits
 
-- **Galeria** — **Mídia → Tuya SL-CE Videolock →** pasta do tipo de evento
-- **Atividades** — registro de texto (*«Campainha — foto»*, *«Acesso liberado — foto»*, *«Alarme de segurança — foto»*) com o caminho da galeria (o painel Atividades **não** embute a imagem)
-- **Retenção** — padrão **30 dias** (1–365), no setup e em **Configurar**; arquivos mais antigos são apagados sozinhos
+### Photos
 
-## Senha de destrave remoto
+| Event | Media folder | Image entity |
+|-------|--------------|--------------|
+| Doorbell | Campainha | Last doorbell photo |
+| Access granted (fingerprint, PIN, face, app, key…) | Acesso liberado | Last access photo |
+| Security alarm (incl. duress) | Alarme de segurança | Last alarm photo |
 
-No setup da integração você define um **PIN numérico de 4 dígitos**. O Home Assistant passa a pedir esse código antes de destrancar (teclado nativo da entidade `lock`).
+Retention default **30 days** (1–365). Activities log text events with gallery paths (images are not embedded in the log panel).
 
-- A senha **não** fica em texto puro: só salt + hash PBKDF2-SHA256 no `config_entry`
-- **Não há tela para alterar** a senha depois. Para trocar: remova a integração e adicione de novo
-- Instalações antigas (sem PIN) precisam ser removidas e recriadas para ativar a proteção
+### Remote unlock PIN
 
-## Entidades (mesmo device)
+- Required 4-digit numeric code before unlock (native HA lock keypad)
+- Stored as salt + PBKDF2-SHA256 only — **not** reversible
+- To change PIN: remove the integration and add it again
 
-Identificador no registry: `(slce_videolock, <device_id>)`.
+## FAQ
 
-| Plataforma | Entidades |
-|------------|-----------|
-| `lock` | Fechadura (ticket unlock/lock) |
-| `sensor` | Bateria, last fingerprint/password/card, app unlocks, temporary codes, last alarm, pedidos / last contact |
-| `binary_sensor` | Online, Campainha, Alerta de coação |
-| `camera` | Stream via allocate + snapshot ffmpeg |
-| `image` | Última foto — Campainha / Acesso liberado / Alarme |
-| Media Browser | Pastas Campainha, Acesso liberado, Alarme de segurança |
+### Does this work with any Tuya lock?
 
-## Testar câmera no HAOS
+It targets **videolock / smart lock** devices exposed by Tuya Cloud (tested on **Novadigital SL-CE Wi-Fi**). Other Tuya locks may work if they support the same ticket unlock + optional stream APIs — open an issue with your category and DPs.
 
-Ver checklist em [`docs/camera-todo.md`](docs/camera-todo.md).
+### Why not the official Tuya integration?
 
-## Desenvolvimento
+Official Tuya does not provide a proper `lock` platform for this device class. This project fills that gap and keeps camera + sensors on the **same** HA device.
 
-Ver skills em `.cursor/skills/` e [`AGENTS.md`](AGENTS.md). Referências: [`docs/references.md`](docs/references.md).
+### Is it local / LAN?
+
+No. Primary path is **Tuya Cloud** (`cloud_polling`). Local unlock via `tuya_local` is unreliable on this model and out of scope.
+
+### Is it a Supervisor add-on?
+
+No. It is a **custom integration** (`custom_components`), installable via Marketplace / HACS.
+
+### Will it appear in the default Marketplace list?
+
+After CI is green and a release is published, the owner submits `rubensflinco/tuya-slce-videolock` to [`hacs/default`](https://github.com/hacs/default). Review often takes months. Until then, install via the My / custom repository link.
+
+### How do I update?
+
+Marketplace/HACS → update (or ⋮ → download a release tag). Prefer GitHub **Releases** (semver), not a raw commit hash.
+
+## Development
 
 ```bash
 python scripts/check_manifest.py
@@ -110,15 +147,15 @@ python scripts/build_release_zip.py
 python -m unittest discover -s tests -v
 ```
 
-Release (Marketplace/HACS): skill `ha-release` — bump + este README (também exibido no HA via `render_readme`) + tag + `gh release` com `slce_videolock.zip`.
+See [`AGENTS.md`](AGENTS.md), [`.cursor/skills/`](.cursor/skills/), [`docs/references.md`](docs/references.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md).
 
-## Atribuição / licenças
+## Attribution
 
-- Código desta integração: **MIT** (Rubens Flinco / RuGiu)
-- Padrões de ticket unlock adaptados de [nicolasglg/tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT)
-- Padrões de sensores / polling adaptados de [crestall/ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT)
-- Câmera: estudo de comportamento em [azerty9971/xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL-3 — **sem cópia de código**) + API pública Tuya
+- This integration: **MIT** — Rubens Flinco / RuGiu
+- Unlock ticket patterns: [nicolasglg/tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT)
+- Sensor / polling patterns: [crestall/ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT)
+- Camera behavior study: [azerty9971/xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL-3 — **no code copied**) + public Tuya API
 
-## Licença
+## License
 
 MIT — Rubens Flinco / RuGiu

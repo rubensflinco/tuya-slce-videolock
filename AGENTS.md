@@ -57,6 +57,8 @@ Release: rule `.cursor/rules/ha-release.mdc` + skill `ha-release`.
 Ao pedir **subir versão**: commit + push + GitHub Release (nunca só localhost).
 Sempre atualizar `README.md` (é o README do Marketplace/HA via `render_readme`).
 
+Descoberta / catálogo: `llms.txt`, topics GitHub, Actions hassfest+HACS, e PR em `hacs/default` — ver [`docs/marketplace-catalog.md`](docs/marketplace-catalog.md).
+
 ## Fora de escopo (MVP)
 
 - Controle 100% local (LAN) da tranca  
