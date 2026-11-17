@@ -25,7 +25,9 @@
 
 **Keywords / busca:** Home Assistant · Tuya smart lock · videolock · Fechadura SL-CE · Novadigital · câmera na fechadura · doorbell · Remote Unlock · HACS · Marketplace
 
-Versão atual: **0.8.0**. Domain: `slce_videolock`. Licença: **MIT**.
+Versão atual: **0.8.1**. Domain: `slce_videolock`. Licença: **MIT**.
+
+**0.8.1:** hassfest fix (`http` dependency), Marketplace categories, SEO/topics, `llms.txt`, CI validate — ready for catalog submission.
 
 Agents and LLMs: see [`llms.txt`](llms.txt) for a machine-oriented summary.
 
