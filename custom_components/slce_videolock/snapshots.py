@@ -28,7 +28,9 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ALBUM_EVENT_TO_KIND,
     DOMAIN,
+    DP_INITIATIVE_MESSAGE,
     SNAPSHOT_CLOUD_MATCH_WINDOW_SECONDS,
+    SNAPSHOT_CLOUD_RETRY_ATTEMPTS,
     SNAPSHOT_CLOUD_RETRY_SECONDS,
     SNAPSHOT_HTTP_URL_PREFIX,
     SNAPSHOT_KIND_ALARM,
@@ -40,8 +42,12 @@ from .const import (
     clamp_retention_days,
 )
 from .stream_bridge import async_allocate_via_sharing
-from .tuya_api import TuyaCloudApi
-from .tuya_media import media_info_from_dict, pick_album_entry
+from .tuya_api import TuyaCloudApi, parse_initiative_message
+from .tuya_media import (
+    extract_media_from_initiative,
+    media_info_from_dict,
+    pick_album_entry,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -289,26 +295,43 @@ class SnapshotGallery:
         event_ts_ms: int | None,
     ) -> tuple[bytes | None, str]:
         """Try Cloud cover first (person still in frame), then live stream."""
-        # 1) media_info_list attached to the door-lock record
+        # 1) media_info_list attached to the door-lock / initiative record
         image = await self._async_from_media_list(media_info_list)
         if image:
             return image, "cloud_record"
 
-        # 2) albums-media (retry once — upload can lag a couple of seconds)
-        image = await self._async_from_album(kind, event_ts_ms)
-        if image:
-            return image, "cloud_album"
-        await asyncio.sleep(SNAPSHOT_CLOUD_RETRY_SECONDS)
-        image = await self._async_from_album(kind, event_ts_ms)
-        if image:
-            return image, "cloud_album"
+        # 2–4) Poll Cloud while the face cover uploads (can take several seconds)
+        attempts = max(1, int(SNAPSHOT_CLOUD_RETRY_ATTEMPTS))
+        for attempt in range(attempts):
+            if attempt:
+                await asyncio.sleep(SNAPSHOT_CLOUD_RETRY_SECONDS)
 
-        # 3) latest/media/url (remote unlock cover=1, alert cover=2)
-        image = await self._async_from_latest_media(kind)
-        if image:
-            return image, "cloud_latest"
+            image = await self._async_from_album(kind, event_ts_ms)
+            if image:
+                return image, "cloud_album"
 
-        # 4) Live stream (often too late — person already left)
+            image = await self._async_from_recent_records(kind, event_ts_ms)
+            if image:
+                return image, "cloud_record"
+
+            image = await self._async_from_initiative(event_ts_ms)
+            if image:
+                return image, "cloud_initiative"
+
+            # latest/media only covers remote unlock (1) / alert (2) — weak for face
+            if attempt == attempts - 1 or kind == SNAPSHOT_KIND_ALARM:
+                image = await self._async_from_latest_media(kind)
+                if image:
+                    return image, "cloud_latest"
+
+        _LOGGER.warning(
+            "Cloud media miss for %s/%s after %s attempt(s) — falling back to live stream",
+            self.device_id,
+            kind,
+            attempts,
+        )
+
+        # Last resort: live stream (often empty hallway — person already left)
         image = await self._async_grab_still()
         if image:
             return image, "live_stream"
@@ -318,12 +341,20 @@ class SnapshotGallery:
         self, media_info_list: list[dict[str, Any]] | None
     ) -> bytes | None:
         for raw in media_info_list or []:
+            if not isinstance(raw, dict):
+                continue
             info = media_info_from_dict(raw)
+            if not info and raw.get("file_key"):
+                # Already-normalized dict from extract_media_from_initiative
+                info = {
+                    "file_url": str(raw.get("file_url") or ""),
+                    "file_key": str(raw["file_key"]),
+                    "bucket": str(raw.get("bucket") or ""),
+                    "file_path": str(raw.get("file_path") or ""),
+                }
             if not info:
                 continue
-            image = await self.api.async_download_decrypt_media(
-                info["file_url"], info["file_key"]
-            )
+            image = await self.api.async_fetch_media_bytes(self.device_id, info)
             if image:
                 return image
         return None
@@ -355,9 +386,77 @@ class SnapshotGallery:
             )
         if not picked:
             return None
-        return await self.api.async_download_decrypt_media(
-            picked["file_url"], picked["file_key"]
+        return await self.api.async_fetch_media_bytes(self.device_id, picked)
+
+    async def _async_from_recent_records(
+        self, kind: str, event_ts_ms: int | None
+    ) -> bytes | None:
+        """Re-query operate-records for media_info_list near the event time."""
+        import time
+
+        now_ms = int(time.time() * 1000)
+        center = event_ts_ms or now_ms
+        start = max(0, center - 180_000)
+        end = now_ms + 30_000
+        records = await self.api.async_get_records(
+            self.device_id,
+            start_time=start,
+            end_time=end,
+            page_size=20,
         )
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            media_list = (
+                record.get("media_info_list")
+                or record.get("mediaInfoList")
+                or []
+            )
+            if not isinstance(media_list, list) or not media_list:
+                continue
+            # Prefer records close in time when we know the event stamp
+            if event_ts_ms:
+                try:
+                    ts = int(record.get("gmt_create") or record.get("update_time") or 0)
+                except (TypeError, ValueError):
+                    ts = 0
+                if ts and abs(ts - event_ts_ms) > SNAPSHOT_CLOUD_MATCH_WINDOW_SECONDS * 1000:
+                    continue
+            image = await self._async_from_media_list(media_list)
+            if image:
+                return image
+        del kind
+        return None
+
+    async def _async_from_initiative(
+        self, event_ts_ms: int | None
+    ) -> bytes | None:
+        """Pull bucket/files from recent initiative_message DP logs."""
+        import time
+
+        now_ms = int(time.time() * 1000)
+        center = event_ts_ms or now_ms
+        logs = await self.api.async_get_device_dp_logs(
+            self.device_id,
+            start_time=max(0, center - 180_000),
+            end_time=now_ms + 30_000,
+            size=50,
+        )
+        for log in logs:
+            if not isinstance(log, dict):
+                continue
+            if str(log.get("code") or "") != DP_INITIATIVE_MESSAGE:
+                continue
+            payload = parse_initiative_message(log.get("value"))
+            if not payload:
+                continue
+            info = extract_media_from_initiative(payload)
+            if not info:
+                continue
+            image = await self.api.async_fetch_media_bytes(self.device_id, info)
+            if image:
+                return image
+        return None
 
     async def _async_from_latest_media(self, kind: str) -> bytes | None:
         # file_type 1 = remote unlock cover, 2 = alert cover
@@ -368,9 +467,7 @@ class SnapshotGallery:
         info = await self.api.async_get_latest_media_url(self.device_id, file_type)
         if not info:
             return None
-        return await self.api.async_download_decrypt_media(
-            info["file_url"], info["file_key"]
-        )
+        return await self.api.async_fetch_media_bytes(self.device_id, info)
 
     async def _async_log_activity(
         self,
@@ -386,8 +483,9 @@ class SnapshotGallery:
         source_bit = {
             "cloud_record": "foto do evento na Cloud",
             "cloud_album": "foto do álbum/reconhecimento na Cloud",
+            "cloud_initiative": "foto do push initiative_message na Cloud",
             "cloud_latest": "capa de mídia na Cloud",
-            "live_stream": "stream ao vivo (fallback)",
+            "live_stream": "stream ao vivo (fallback — pessoa já saiu do quadro)",
         }.get(source or "", source or "")
         source_txt = f" Origem: {source_bit}." if source_bit else ""
         message = (

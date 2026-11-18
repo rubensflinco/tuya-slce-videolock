@@ -6,8 +6,12 @@ import unittest
 
 from custom_components.slce_videolock.const import SNAPSHOT_KIND_UNLOCK
 from custom_components.slce_videolock.tuya_media import (
+    compose_storage_url,
     decrypt_tuya_lock_media,
+    extract_media_from_initiative,
     media_info_from_dict,
+    needs_url_resolve,
+    normalize_storage_base_url,
     pick_album_entry,
 )
 
@@ -46,6 +50,51 @@ class TestMediaInfoHelpers(unittest.TestCase):
         self.assertIsNotNone(info)
         assert info is not None
         self.assertEqual(info["file_url"], "https://x/y.jpg")
+
+    def test_compose_truncated_host_plus_path(self) -> None:
+        # Official docs sample: file_url ends with ".com6" (garbage digit)
+        url = compose_storage_url(
+            file_url="https://ty-cn-storage60-1254153901.cos.tuyacn.com6",
+            file_path="/3039e1-30532026.jpg",
+            bucket="ty-cn-storage60-1254153901",
+        )
+        self.assertEqual(
+            url,
+            "https://ty-cn-storage60-1254153901.cos.tuyacn.com/3039e1-30532026.jpg",
+        )
+
+    def test_normalize_base_url(self) -> None:
+        self.assertEqual(
+            normalize_storage_base_url(
+                "https://ty-cn-storage60-1254153901.cos.tuyacn.com6"
+            ),
+            "https://ty-cn-storage60-1254153901.cos.tuyacn.com",
+        )
+
+    def test_bucket_path_needs_resolve(self) -> None:
+        info = media_info_from_dict(
+            {
+                "bucket": "ty-us-storage",
+                "file_path": "/face.jpg",
+                "file_key": "0123456789abcdef",
+            }
+        )
+        self.assertIsNotNone(info)
+        assert info is not None
+        self.assertTrue(needs_url_resolve(info))
+
+    def test_initiative_files_array(self) -> None:
+        info = extract_media_from_initiative(
+            {
+                "bucket": "ty-us-storage",
+                "files": [["/path/face.jpeg", "0123456789abcdef"]],
+            }
+        )
+        self.assertIsNotNone(info)
+        assert info is not None
+        self.assertEqual(info["bucket"], "ty-us-storage")
+        self.assertEqual(info["file_path"], "/path/face.jpeg")
+        self.assertEqual(info["file_key"], "0123456789abcdef")
 
     def test_pick_album_entry_by_time(self) -> None:
         albums = [

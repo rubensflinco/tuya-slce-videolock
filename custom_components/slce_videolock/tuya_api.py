@@ -38,6 +38,8 @@ from .const import (
     INITIATIVE_EXT_TYPE_MAP,
     LATEST_MEDIA_URL_ENDPOINT,
     LOG_PAGE_SIZE,
+    MEDIA_FILE_ENDPOINT,
+    MOVEMENT_CONFIGS_ENDPOINT,
     OPEN_LOGS_ENDPOINT,
     RECORDS_ENDPOINT,
     REMOTE_UNLOCKS_ENDPOINT,
@@ -47,7 +49,14 @@ from .const import (
     SUPPORTED_LOCK_CATEGORIES,
     TICKET_ENDPOINT,
 )
-from .tuya_media import decrypt_tuya_lock_media, media_info_from_dict
+from .tuya_media import (
+    compose_storage_url,
+    decrypt_tuya_lock_media,
+    extract_media_from_initiative,
+    is_direct_download_url,
+    media_info_from_dict,
+    needs_url_resolve,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -882,22 +891,38 @@ class TuyaCloudApi:
                 payload = parse_initiative_message(value)
                 if not payload:
                     continue
+                media = extract_media_from_initiative(payload)
+                media_list = [media] if media else []
                 alarm_type = initiative_to_alarm_type(payload)
-                if not alarm_type:
-                    continue
                 ext = payload.get("ext") if isinstance(payload.get("ext"), dict) else {}
-                alarm_events.append(
-                    {
-                        "timestamp_ms": ts,
-                        "record_type": "alarm",
-                        "alarm_type": alarm_type,
-                        "details": {
-                            "source": "initiative_message",
-                            "ext_type": ext.get("type"),
-                            "payload_time": payload.get("time"),
-                        },
-                    }
-                )
+                if alarm_type:
+                    alarm_events.append(
+                        {
+                            "timestamp_ms": ts,
+                            "record_type": "alarm",
+                            "alarm_type": alarm_type,
+                            "media_info_list": media_list,
+                            "details": {
+                                "source": "initiative_message",
+                                "ext_type": ext.get("type"),
+                                "payload_time": payload.get("time"),
+                            },
+                        }
+                    )
+                elif media_list:
+                    # Face/doorbell push often carries bucket+files without alarm=true
+                    unlock_events.append(
+                        {
+                            "timestamp_ms": ts,
+                            "record_type": "normal",
+                            "unlock_name": "initiative_media",
+                            "media_info_list": media_list,
+                            "details": {
+                                "source": "initiative_message",
+                                "ext_type": ext.get("type"),
+                            },
+                        }
+                    )
             elif code == DP_ALARM_LOCK:
                 alarm_events.append(
                     {
@@ -939,7 +964,7 @@ class TuyaCloudApi:
         path = ALBUMS_MEDIA_ENDPOINT.format(device_id=device_id)
         resp = await self._request("GET", path)
         if not resp.get("success"):
-            _LOGGER.debug(
+            _LOGGER.warning(
                 "albums-media failed for %s: %s (%s)",
                 device_id,
                 resp.get("msg"),
@@ -952,7 +977,16 @@ class TuyaCloudApi:
             or result.get("albumList")
             or []
         )
-        return albums if isinstance(albums, list) else []
+        if not isinstance(albums, list):
+            return []
+        if not albums:
+            _LOGGER.warning(
+                "albums-media empty for %s (order_code=%s) — "
+                "check Door Lock Cloud Storage / Beta API on Tuya project",
+                device_id,
+                result.get("order_code") or result.get("orderCode"),
+            )
+        return albums
 
     async def async_get_latest_media_url(
         self, device_id: str, file_type: int
@@ -964,7 +998,7 @@ class TuyaCloudApi:
         )
         resp = await self._request("GET", path)
         if not resp.get("success"):
-            _LOGGER.debug(
+            _LOGGER.warning(
                 "latest/media/url failed for %s type=%s: %s (%s)",
                 device_id,
                 file_type,
@@ -974,6 +1008,91 @@ class TuyaCloudApi:
             return None
         result = resp.get("result") or {}
         return media_info_from_dict(result) if isinstance(result, dict) else None
+
+    async def async_resolve_storage_url(
+        self,
+        device_id: str,
+        bucket: str,
+        file_path: str,
+    ) -> str | None:
+        """Resolve bucket + relative path to a signed download URL.
+
+        Used by initiative_message / IPC style payloads and when
+        ``latest/media/url`` returns a truncated host + ``file_path``.
+        """
+        bucket = (bucket or "").strip()
+        file_path = (file_path or "").strip()
+        if not bucket or not file_path:
+            return None
+
+        endpoints = (
+            MOVEMENT_CONFIGS_ENDPOINT,
+            MEDIA_FILE_ENDPOINT,
+        )
+        for endpoint in endpoints:
+            path = build_signed_path(
+                endpoint.format(device_id=device_id),
+                {"bucket": bucket, "file_path": file_path},
+            )
+            resp = await self._request("GET", path)
+            if not resp.get("success"):
+                _LOGGER.debug(
+                    "Resolve %s failed for %s: %s (%s)",
+                    endpoint.split("/")[-1],
+                    device_id,
+                    resp.get("msg"),
+                    resp.get("code"),
+                )
+                continue
+            result = resp.get("result")
+            if isinstance(result, str) and result.startswith("http"):
+                return result
+            if isinstance(result, dict):
+                for key in ("url", "file_url", "fileUrl", "media_url", "mediaUrl"):
+                    raw = result.get(key)
+                    if isinstance(raw, str) and raw.startswith("http"):
+                        return raw
+        return None
+
+    async def async_fetch_media_bytes(
+        self, device_id: str, info: dict[str, str]
+    ) -> bytes | None:
+        """Resolve (if needed), download and decrypt a media_info dict."""
+        if not info or not info.get("file_key"):
+            return None
+
+        url = (info.get("file_url") or "").strip()
+        bucket = (info.get("bucket") or "").strip()
+        file_path = (info.get("file_path") or "").strip()
+
+        if needs_url_resolve(info) or (
+            bucket and file_path and not is_direct_download_url(url)
+        ):
+            resolved = await self.async_resolve_storage_url(
+                device_id, bucket, file_path
+            )
+            if resolved:
+                url = resolved
+            elif not url:
+                url = (
+                    compose_storage_url(
+                        file_url="", file_path=file_path, bucket=bucket
+                    )
+                    or ""
+                )
+                _LOGGER.warning(
+                    "movement-configs resolve failed for %s; trying composed COS URL",
+                    device_id,
+                )
+
+        if not url:
+            _LOGGER.warning(
+                "No download URL for media (bucket=%s path=%s)",
+                bucket,
+                file_path,
+            )
+            return None
+        return await self.async_download_decrypt_media(url, info["file_key"])
 
     async def async_download_decrypt_media(
         self, file_url: str, file_key: str
@@ -990,7 +1109,7 @@ class TuyaCloudApi:
                     _LOGGER.warning(
                         "Media download HTTP %s for %s",
                         resp.status,
-                        file_url[:80],
+                        file_url[:120],
                     )
                     return None
                 encrypted = await resp.read()

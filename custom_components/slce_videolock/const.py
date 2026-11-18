@@ -42,8 +42,13 @@ SNAPSHOT_KIND_LABELS: dict[str, str] = {
 # Cloud album / media (prefer over live stream — photo taken at recognition time)
 ALBUMS_MEDIA_ENDPOINT = "/v1.0/smart-lock/devices/{device_id}/albums-media"
 LATEST_MEDIA_URL_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/latest/media/url"
+# Resolve bucket+path → signed download URL (IPC / initiative_message style)
+MOVEMENT_CONFIGS_ENDPOINT = "/v1.0/devices/{device_id}/movement-configs"
+# Alternate resolve used by some lock SDKs
+MEDIA_FILE_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/media/file"
 # How long to wait/retry for Tuya to upload the event cover after unlock
-SNAPSHOT_CLOUD_RETRY_SECONDS = 2.0
+SNAPSHOT_CLOUD_RETRY_SECONDS = 3.0
+SNAPSHOT_CLOUD_RETRY_ATTEMPTS = 5
 SNAPSHOT_CLOUD_MATCH_WINDOW_SECONDS = 180
 
 # albums-media eventType → our snapshot kind

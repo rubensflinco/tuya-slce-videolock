@@ -25,9 +25,11 @@
 
 **Keywords / busca:** Home Assistant · Tuya smart lock · videolock · Fechadura SL-CE · Novadigital · câmera na fechadura · doorbell · Remote Unlock · HACS · Marketplace
 
-Versão atual: **0.9.0**. Domain: `slce_videolock`. Licença: **MIT**.
+Versão atual: **0.9.1**. Domain: `slce_videolock`. Licença: **MIT**.
 
-**0.9.0:** fotos de acesso/alarme/campainha preferem a **capa do evento na Cloud** (álbum / reconhecimento facial) em vez do stream ao vivo — a pessoa ainda aparece no quadro.
+**0.9.1:** corrige fotos vazias (corredor) no acesso liberado — resolve `bucket`+`path` via API (`movement-configs`), retries mais longos no álbum Cloud, reconsulta records/`initiative_message` antes do fallback de stream.
+
+**0.9.0:** fotos de acesso/alarme/campainha preferem a **capa do evento na Cloud** (álbum / reconhecimento facial) em vez do stream ao vivo.
 
 **0.8.2:** catalog submission release after green HACS+hassfest CI; prior 0.8.1 fixed http dependency.
 
@@ -109,7 +111,9 @@ Registry id: `(slce_videolock, <device_id>)`.
 | Access granted (fingerprint, PIN, face, app, key…) | Acesso liberado | Last access photo |
 | Security alarm (incl. duress) | Alarme de segurança | Last alarm photo |
 
-Photos prefer the **Tuya Cloud event cover** (album / face recognition at unlock time). Live stream is only a fallback (often too late). Retention default **30 days** (1–365). Activities log text events with gallery paths and source (`cloud_album` / `live_stream`…).
+Photos prefer the **Tuya Cloud event cover** (album / face recognition / `initiative_message`). The integration resolves storage URLs (`bucket`+`file_path`) and retries Cloud upload for several seconds before any live-stream fallback (often an empty hallway). Retention default **30 days** (1–365). Activity entries include source (`cloud_album` / `cloud_initiative` / `live_stream`…).
+
+No Tuya IoT: authorize **Smart Lock Open Service**, enable **Beta API** if needed for `movement-configs`, and a door-lock cloud storage plan when albums-media is empty.
 
 ### Remote unlock PIN
 
