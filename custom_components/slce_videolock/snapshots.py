@@ -26,7 +26,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ALBUM_EVENT_TO_KIND,
     DOMAIN,
+    SNAPSHOT_CLOUD_MATCH_WINDOW_SECONDS,
+    SNAPSHOT_CLOUD_RETRY_SECONDS,
     SNAPSHOT_HTTP_URL_PREFIX,
     SNAPSHOT_KIND_ALARM,
     SNAPSHOT_KIND_DOORBELL,
@@ -38,6 +41,7 @@ from .const import (
 )
 from .stream_bridge import async_allocate_via_sharing
 from .tuya_api import TuyaCloudApi
+from .tuya_media import media_info_from_dict, pick_album_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -244,16 +248,22 @@ class SnapshotGallery:
         kind: str,
         *,
         detail: str | None = None,
+        media_info_list: list[dict[str, Any]] | None = None,
+        event_ts_ms: int | None = None,
     ) -> Path | None:
-        """Grab a still from the live stream and persist it under ``kind``."""
+        """Prefer Cloud event cover (face/album); fall back to live stream."""
         if kind not in SNAPSHOT_KINDS:
             _LOGGER.warning("Unknown snapshot kind %s", kind)
             return None
         async with self._capture_lock:
-            image = await self._async_grab_still()
+            image, source = await self._async_resolve_image(
+                kind,
+                media_info_list=media_info_list,
+                event_ts_ms=event_ts_ms,
+            )
             if not image:
                 _LOGGER.warning(
-                    "Snapshot (%s) failed for %s (no image from stream)",
+                    "Snapshot (%s) failed for %s (no cloud media and no stream)",
                     kind,
                     self.device_id,
                 )
@@ -263,9 +273,104 @@ class SnapshotGallery:
             self._latest_path[kind] = path
             self._latest_updated[kind] = dt_util.utcnow()
             self._notify_listeners(kind)
-            await self._async_log_activity(kind, path, detail=detail)
-            _LOGGER.info("Saved %s snapshot %s", kind, path.name)
+            await self._async_log_activity(
+                kind, path, detail=detail, source=source
+            )
+            _LOGGER.info(
+                "Saved %s snapshot %s (source=%s)", kind, path.name, source
+            )
             return path
+
+    async def _async_resolve_image(
+        self,
+        kind: str,
+        *,
+        media_info_list: list[dict[str, Any]] | None,
+        event_ts_ms: int | None,
+    ) -> tuple[bytes | None, str]:
+        """Try Cloud cover first (person still in frame), then live stream."""
+        # 1) media_info_list attached to the door-lock record
+        image = await self._async_from_media_list(media_info_list)
+        if image:
+            return image, "cloud_record"
+
+        # 2) albums-media (retry once — upload can lag a couple of seconds)
+        image = await self._async_from_album(kind, event_ts_ms)
+        if image:
+            return image, "cloud_album"
+        await asyncio.sleep(SNAPSHOT_CLOUD_RETRY_SECONDS)
+        image = await self._async_from_album(kind, event_ts_ms)
+        if image:
+            return image, "cloud_album"
+
+        # 3) latest/media/url (remote unlock cover=1, alert cover=2)
+        image = await self._async_from_latest_media(kind)
+        if image:
+            return image, "cloud_latest"
+
+        # 4) Live stream (often too late — person already left)
+        image = await self._async_grab_still()
+        if image:
+            return image, "live_stream"
+        return None, "none"
+
+    async def _async_from_media_list(
+        self, media_info_list: list[dict[str, Any]] | None
+    ) -> bytes | None:
+        for raw in media_info_list or []:
+            info = media_info_from_dict(raw)
+            if not info:
+                continue
+            image = await self.api.async_download_decrypt_media(
+                info["file_url"], info["file_key"]
+            )
+            if image:
+                return image
+        return None
+
+    async def _async_from_album(
+        self, kind: str, event_ts_ms: int | None
+    ) -> bytes | None:
+        albums = await self.api.async_get_albums_media(self.device_id)
+        if not albums:
+            return None
+        event_types = {
+            et for et, k in ALBUM_EVENT_TO_KIND.items() if k == kind
+        }
+        picked = pick_album_entry(
+            albums,
+            kind=kind,
+            event_types=event_types,
+            around_ts_ms=event_ts_ms,
+            window_seconds=SNAPSHOT_CLOUD_MATCH_WINDOW_SECONDS,
+        )
+        if not picked:
+            # Fallback: newest album entry of any matching kind without time filter
+            picked = pick_album_entry(
+                albums,
+                kind=kind,
+                event_types=event_types,
+                around_ts_ms=None,
+                window_seconds=SNAPSHOT_CLOUD_MATCH_WINDOW_SECONDS,
+            )
+        if not picked:
+            return None
+        return await self.api.async_download_decrypt_media(
+            picked["file_url"], picked["file_key"]
+        )
+
+    async def _async_from_latest_media(self, kind: str) -> bytes | None:
+        # file_type 1 = remote unlock cover, 2 = alert cover
+        file_type = 2 if kind == SNAPSHOT_KIND_ALARM else 1
+        if kind == SNAPSHOT_KIND_DOORBELL:
+            # Doorbell often lands in albums; latest unlock cover is a weak fallback
+            file_type = 1
+        info = await self.api.async_get_latest_media_url(self.device_id, file_type)
+        if not info:
+            return None
+        return await self.api.async_download_decrypt_media(
+            info["file_url"], info["file_key"]
+        )
 
     async def _async_log_activity(
         self,
@@ -273,12 +378,21 @@ class SnapshotGallery:
         path: Path,
         *,
         detail: str | None = None,
+        source: str | None = None,
     ) -> None:
         """Write an Activity entry pointing to where the photo lives."""
         label = SNAPSHOT_KIND_LABELS.get(kind, kind)
         detail_bit = f" ({detail})" if detail else ""
+        source_bit = {
+            "cloud_record": "foto do evento na Cloud",
+            "cloud_album": "foto do álbum/reconhecimento na Cloud",
+            "cloud_latest": "capa de mídia na Cloud",
+            "live_stream": "stream ao vivo (fallback)",
+        }.get(source or "", source or "")
+        source_txt = f" Origem: {source_bit}." if source_bit else ""
         message = (
-            f"Tirou uma foto — {label}{detail_bit} ({path.name}). "
+            f"Tirou uma foto — {label}{detail_bit} ({path.name})."
+            f"{source_txt} "
             f"Para ver: Mídia → Tuya SL-CE Videolock → {label} "
             f"(ou entidade «Última foto — {label}»). "
             f"Galeria: {self.media_source_uri(kind)}. "

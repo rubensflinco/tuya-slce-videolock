@@ -101,14 +101,24 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def _schedule_snapshot(
-        self, kind: str, *, detail: str | None = None
+        self,
+        kind: str,
+        *,
+        detail: str | None = None,
+        media_info_list: list[dict[str, Any]] | None = None,
+        event_ts_ms: int | None = None,
     ) -> None:
         """Fire-and-forget still capture so poll cycle is not blocked."""
         gallery = self._snapshot_gallery
         if gallery is None:
             return
         self.hass.async_create_task(
-            gallery.async_capture(kind, detail=detail)
+            gallery.async_capture(
+                kind,
+                detail=detail,
+                media_info_list=media_info_list,
+                event_ts_ms=event_ts_ms,
+            )
         )
 
     @callback
@@ -279,7 +289,11 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "timestamp": ts,
                 "record_id": event.get("record_id"),
             })
-            self._schedule_snapshot(SNAPSHOT_KIND_DOORBELL)
+            self._schedule_snapshot(
+                SNAPSHOT_KIND_DOORBELL,
+                media_info_list=event.get("media_info_list"),
+                event_ts_ms=ts or now_ms,
+            )
             self._schedule_pulse_reset(DP_DOORBELL)
             _LOGGER.info("Doorbell event from records (ts=%s)", ts)
 
@@ -314,7 +328,12 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "record_id": event.get("record_id"),
                 },
             )
-            self._schedule_snapshot(SNAPSHOT_KIND_UNLOCK, detail=method)
+            self._schedule_snapshot(
+                SNAPSHOT_KIND_UNLOCK,
+                detail=method,
+                media_info_list=event.get("media_info_list"),
+                event_ts_ms=ts or now_ms,
+            )
             _LOGGER.info("Unlock event from records: %s (ts=%s)", method, ts)
 
         for event in alarm_events:
@@ -341,7 +360,12 @@ class SlceVideolockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "record_id": event.get("record_id"),
                 },
             )
-            self._schedule_snapshot(SNAPSHOT_KIND_ALARM, detail=alarm_type)
+            self._schedule_snapshot(
+                SNAPSHOT_KIND_ALARM,
+                detail=alarm_type,
+                media_info_list=event.get("media_info_list"),
+                event_ts_ms=ts or now_ms,
+            )
             _LOGGER.warning(
                 "Alarm event from logs: %s (ts=%s source=%s)",
                 alarm_type,

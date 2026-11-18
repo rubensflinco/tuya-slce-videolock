@@ -21,6 +21,7 @@ import aiohttp
 from .const import (
     ALARM_LOGS_ENDPOINT,
     ALARM_LOGS_V11_ENDPOINT,
+    ALBUMS_MEDIA_ENDPOINT,
     API_REGIONS,
     DEFAULT_REGION,
     DEVICE_ENDPOINT,
@@ -35,6 +36,7 @@ from .const import (
     DP_INITIATIVE_MESSAGE,
     DP_LOCK_MOTOR_STATE,
     INITIATIVE_EXT_TYPE_MAP,
+    LATEST_MEDIA_URL_ENDPOINT,
     LOG_PAGE_SIZE,
     OPEN_LOGS_ENDPOINT,
     RECORDS_ENDPOINT,
@@ -45,6 +47,7 @@ from .const import (
     SUPPORTED_LOCK_CATEGORIES,
     TICKET_ENDPOINT,
 )
+from .tuya_media import decrypt_tuya_lock_media, media_info_from_dict
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -781,6 +784,11 @@ class TuyaCloudApi:
             record_type = record.get("record_type", "normal")
             dps = record.get("dps") or []
             keys = _dp_keys(dps if isinstance(dps, list) else [])
+            media_list = (
+                record.get("media_info_list")
+                or record.get("mediaInfoList")
+                or []
+            )
             event = {
                 "timestamp_ms": ts,
                 "record_id": record.get("record_id"),
@@ -789,6 +797,7 @@ class TuyaCloudApi:
                 "user_name": record.get("user_name"),
                 "unlock_name": record.get("unlock_name"),
                 "dps": dps,
+                "media_info_list": media_list if isinstance(media_list, list) else [],
             }
             if "doorbell" in keys:
                 doorbell_events.append(event)
@@ -922,3 +931,76 @@ class TuyaCloudApi:
                 )
 
         return unlock_events, alarm_events, doorbell_events
+
+    async def async_get_albums_media(
+        self, device_id: str
+    ) -> list[dict[str, Any]]:
+        """Fetch smart-lock album covers (face unlock / doorbell / alarm)."""
+        path = ALBUMS_MEDIA_ENDPOINT.format(device_id=device_id)
+        resp = await self._request("GET", path)
+        if not resp.get("success"):
+            _LOGGER.debug(
+                "albums-media failed for %s: %s (%s)",
+                device_id,
+                resp.get("msg"),
+                resp.get("code"),
+            )
+            return []
+        result = resp.get("result") or {}
+        albums = (
+            result.get("album_list")
+            or result.get("albumList")
+            or []
+        )
+        return albums if isinstance(albums, list) else []
+
+    async def async_get_latest_media_url(
+        self, device_id: str, file_type: int
+    ) -> dict[str, str] | None:
+        """Get cover of last remote unlock (1) or alert (2)."""
+        path = build_signed_path(
+            LATEST_MEDIA_URL_ENDPOINT.format(device_id=device_id),
+            {"file_type": int(file_type)},
+        )
+        resp = await self._request("GET", path)
+        if not resp.get("success"):
+            _LOGGER.debug(
+                "latest/media/url failed for %s type=%s: %s (%s)",
+                device_id,
+                file_type,
+                resp.get("msg"),
+                resp.get("code"),
+            )
+            return None
+        result = resp.get("result") or {}
+        return media_info_from_dict(result) if isinstance(result, dict) else None
+
+    async def async_download_decrypt_media(
+        self, file_url: str, file_key: str
+    ) -> bytes | None:
+        """HTTP GET encrypted cover and AES-decrypt to image bytes."""
+        import asyncio
+
+        session = self._get_session()
+        try:
+            async with session.get(
+                file_url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status >= 400:
+                    _LOGGER.warning(
+                        "Media download HTTP %s for %s",
+                        resp.status,
+                        file_url[:80],
+                    )
+                    return None
+                encrypted = await resp.read()
+        except (TimeoutError, aiohttp.ClientError, OSError) as err:
+            _LOGGER.warning("Media download failed: %s", err)
+            return None
+        try:
+            return await asyncio.to_thread(
+                decrypt_tuya_lock_media, encrypted, file_key
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Media decrypt failed: %s", err)
+            return None

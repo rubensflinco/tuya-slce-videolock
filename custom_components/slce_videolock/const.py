@@ -39,6 +39,47 @@ SNAPSHOT_KIND_LABELS: dict[str, str] = {
     SNAPSHOT_KIND_ALARM: "Alarme de segurança",
 }
 
+# Cloud album / media (prefer over live stream — photo taken at recognition time)
+ALBUMS_MEDIA_ENDPOINT = "/v1.0/smart-lock/devices/{device_id}/albums-media"
+LATEST_MEDIA_URL_ENDPOINT = "/v1.0/devices/{device_id}/door-lock/latest/media/url"
+# How long to wait/retry for Tuya to upload the event cover after unlock
+SNAPSHOT_CLOUD_RETRY_SECONDS = 2.0
+SNAPSHOT_CLOUD_MATCH_WINDOW_SECONDS = 180
+
+# albums-media eventType → our snapshot kind
+# https://developer.tuya.com/en/docs/cloud/doorlock-api-photovideos
+ALBUM_EVENT_TO_KIND: dict[int, str] = {
+    0: SNAPSHOT_KIND_ALARM,  # anti-pry
+    1: SNAPSHOT_KIND_UNLOCK,  # remote unlock request (with photo)
+    2: SNAPSHOT_KIND_ALARM,  # fingerprint failed
+    3: SNAPSHOT_KIND_ALARM,  # password failed
+    4: SNAPSHOT_KIND_ALARM,  # card failed
+    5: SNAPSHOT_KIND_ALARM,  # face failed
+    6: SNAPSHOT_KIND_ALARM,  # palm failed
+    7: SNAPSHOT_KIND_ALARM,  # finger vein failed
+    8: SNAPSHOT_KIND_UNLOCK,  # fingerprint
+    9: SNAPSHOT_KIND_UNLOCK,  # password
+    10: SNAPSHOT_KIND_UNLOCK,  # card
+    11: SNAPSHOT_KIND_UNLOCK,  # face recognition
+    12: SNAPSHOT_KIND_UNLOCK,  # palm
+    13: SNAPSHOT_KIND_UNLOCK,  # finger vein
+    14: SNAPSHOT_KIND_UNLOCK,  # temporary password
+    15: SNAPSHOT_KIND_UNLOCK,  # dynamic password
+    16: SNAPSHOT_KIND_UNLOCK,  # remote unlocking
+    17: SNAPSHOT_KIND_UNLOCK,  # temp password report
+    18: SNAPSHOT_KIND_DOORBELL,  # doorbell
+    19: SNAPSHOT_KIND_ALARM,  # duress
+    20: SNAPSHOT_KIND_ALARM,  # low battery
+    21: SNAPSHOT_KIND_UNLOCK,  # mechanical key
+    22: SNAPSHOT_KIND_ALARM,  # high temperature
+    23: SNAPSHOT_KIND_DOORBELL,  # doorbell + remote
+    24: SNAPSHOT_KIND_ALARM,  # loitering
+    25: SNAPSHOT_KIND_ALARM,  # tamper
+    26: SNAPSHOT_KIND_UNLOCK,  # special fingerprint
+    27: SNAPSHOT_KIND_UNLOCK,  # arm mode unlock
+    28: SNAPSHOT_KIND_UNLOCK,  # remote control
+}
+
 
 def clamp_retention_days(raw: object) -> int:
     """Clamp doorbell snapshot retention days to allowed range."""

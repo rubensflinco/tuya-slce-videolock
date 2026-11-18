@@ -25,11 +25,11 @@
 
 **Keywords / busca:** Home Assistant · Tuya smart lock · videolock · Fechadura SL-CE · Novadigital · câmera na fechadura · doorbell · Remote Unlock · HACS · Marketplace
 
-Versão atual: **0.8.2**. Domain: `slce_videolock`. Licença: **MIT**.
+Versão atual: **0.9.0**. Domain: `slce_videolock`. Licença: **MIT**.
+
+**0.9.0:** fotos de acesso/alarme/campainha preferem a **capa do evento na Cloud** (álbum / reconhecimento facial) em vez do stream ao vivo — a pessoa ainda aparece no quadro.
 
 **0.8.2:** catalog submission release after green HACS+hassfest CI; prior 0.8.1 fixed http dependency.
-
-**0.8.1:** hassfest fix (`http` dependency), Marketplace categories, SEO/topics, `llms.txt`, CI validate — ready for catalog submission.
 
 Agents and LLMs: see [`llms.txt`](llms.txt) for a machine-oriented summary.
 
@@ -45,7 +45,7 @@ The **official Tuya** Home Assistant integration does **not** expose a usable `l
 | Remote unlock PIN (4 digits) | ✅ Setup; PBKDF2 hash; native HA keypad | `LockEntity.code_format` |
 | Battery, online, doorbell, last_* | ✅ Configurable Cloud polling (default **60 s**) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
 | Camera stream | ✅ Sharing + `stream/actions/allocate` (RTSP/HLS) + ffmpeg | Tuya docs; behavior studied in [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **not copied**) |
-| Photos + gallery | ✅ Snapshot on **doorbell**, **access granted**, **alarm**; Media folders; retention **30 days** | `image` + `media_source` |
+| Photos + gallery | ✅ Snapshot on **doorbell**, **access granted**, **alarm**; prefers **Cloud album/face cover**; Media folders; retention **30 days** | `image` + `media_source` |
 
 **LAN / `tuya_local`:** out of scope — local unlock on this videolock is not reliable.
 
@@ -109,7 +109,7 @@ Registry id: `(slce_videolock, <device_id>)`.
 | Access granted (fingerprint, PIN, face, app, key…) | Acesso liberado | Last access photo |
 | Security alarm (incl. duress) | Alarme de segurança | Last alarm photo |
 
-Retention default **30 days** (1–365). Activities log text events with gallery paths (images are not embedded in the log panel).
+Photos prefer the **Tuya Cloud event cover** (album / face recognition at unlock time). Live stream is only a fallback (often too late). Retention default **30 days** (1–365). Activities log text events with gallery paths and source (`cloud_album` / `live_stream`…).
 
 ### Remote unlock PIN
 
