@@ -41,7 +41,6 @@ from .const import (
     SNAPSHOT_SUBDIR,
     clamp_retention_days,
 )
-from .stream_bridge import async_allocate_via_sharing
 from .tuya_api import TuyaCloudApi, parse_initiative_message
 from .tuya_media import (
     extract_media_from_initiative,
@@ -207,7 +206,9 @@ class SnapshotGallery:
             files = await self.async_list_snapshots(kind)
             if files:
                 self._latest_path[kind] = files[0]
-                self._latest_updated[kind] = _mtime_utc(files[0])
+                self._latest_updated[kind] = await self.hass.async_add_executor_job(
+                    _mtime_utc, files[0]
+                )
         await self.async_purge_expired()
 
     async def async_list_snapshots(self, kind: str) -> list[Path]:
@@ -236,7 +237,9 @@ class SnapshotGallery:
                 return None
             path = files[0]
             self._latest_path[kind] = path
-            self._latest_updated[kind] = _mtime_utc(path)
+            self._latest_updated[kind] = await self.hass.async_add_executor_job(
+                _mtime_utc, path
+            )
 
         def _read() -> bytes | None:
             if not path.is_file():
@@ -534,12 +537,6 @@ class SnapshotGallery:
         )
 
     async def _async_stream_url(self) -> str | None:
-        for stype in ("rtsp", "hls"):
-            url, _label = await async_allocate_via_sharing(
-                self.hass, self.device_id, stype
-            )
-            if url:
-                return url
         url, _used, err = await self.api.async_allocate_stream_preferred(
             self.device_id, self.preferred_stream
         )
@@ -607,7 +604,9 @@ class SnapshotGallery:
                 files = await self.async_list_snapshots(kind)
                 if files:
                     self._latest_path[kind] = files[0]
-                    self._latest_updated[kind] = _mtime_utc(files[0])
+                    self._latest_updated[kind] = await self.hass.async_add_executor_job(
+                        _mtime_utc, files[0]
+                    )
                 else:
                     self._latest_path[kind] = None
                     self._latest_updated[kind] = None

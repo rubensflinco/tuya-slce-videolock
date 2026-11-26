@@ -1,4 +1,4 @@
-"""Camera platform — Sharing/OpenAPI allocate + fresh stream on each open."""
+"""Camera platform — OpenAPI allocate + fresh stream on each open."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import CONF_STREAM_TYPE, DEFAULT_STREAM_TYPE, DOMAIN
 from .coordinator import SlceVideolockCoordinator
 from .device import build_device_info
-from .stream_bridge import async_allocate_via_sharing
 from .tuya_api import TuyaCloudApi
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,7 +38,7 @@ async def async_setup_entry(
 
 
 class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
-    """Videolock camera via Sharing (preferred) or Cloud OpenAPI allocate.
+    """Videolock camera via Cloud OpenAPI allocation.
 
     Tuya signed URLs expire within seconds if unused / minutes if used. HA's
     stream worker keeps the old URL → stuck spinner + ``Invalid data`` / 404.
@@ -90,8 +89,7 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
             if "not subscribed" in self._last_stream_error.lower():
                 attrs["stream_fix_hint"] = (
                     "Ative o trial gratuito IoT Video Live Stream no projeto "
-                    "Tuya Cloud (Cloud → Cloud Services), ou mantenha a "
-                    "integração oficial Tuya carregada para Sharing."
+                    "Tuya Cloud (Cloud → Cloud Services)."
                 )
         return attrs
 
@@ -106,26 +104,6 @@ class SlceVideolockCamera(CoordinatorEntity[SlceVideolockCoordinator], Camera):
 
     async def stream_source(self) -> str | None:
         """Return a freshly allocated live stream URL."""
-        # Always try RTSP before HLS for Sharing — HA stream worker often fails
-        # on Tuya HLS (Invalid data / session expired) even when allocate succeeds.
-        sharing_order = ("rtsp", "hls")
-
-        # 1) Smart Life Sharing (same path as official Tuya / Xtend allocate)
-        for stype in sharing_order:
-            url, label = await async_allocate_via_sharing(
-                self.hass, self._device_id, stype
-            )
-            if url:
-                self._last_stream_type = label or stype
-                self._last_stream_error = None
-                _LOGGER.info(
-                    "Using %s stream for %s",
-                    self._last_stream_type,
-                    self._device_id,
-                )
-                return url
-
-        # 2) Cloud OpenAPI fallback
         url, used, err = await self._api.async_allocate_stream_preferred(
             self._device_id, self._preferred_stream
         )

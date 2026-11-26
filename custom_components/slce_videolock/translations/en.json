@@ -27,7 +27,7 @@
       },
       "manual_device": {
         "title": "Enter Device ID",
-        "description": "Cloud did not return a lock list (Smart Life account may be unlinked, or the list endpoint is empty).\n\nPaste the **Device ID** from the Tuya Cloud console (Devices) or from Smart Life → device → Device Information.\n\nFor this apartment the SL-CE is typically `eba0b0f3d9b38977ed8b0a`.\n\nAlso confirm the app account is linked under [Cloud project]({tuya_project_url}) → Devices → Link Tuya App Account.",
+        "description": "Cloud did not return a lock list (Smart Life account may be unlinked, or the list endpoint is empty).\n\nPaste the **Device ID** from the Tuya Cloud console (Devices) or from Smart Life → device → Device Information.\n\nAlso confirm the app account is linked under [Cloud project]({tuya_project_url}) → Devices → Link Tuya App Account.",
         "data": {
           "device_id": "Device ID"
         },

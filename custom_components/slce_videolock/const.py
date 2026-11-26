@@ -97,8 +97,6 @@ def clamp_retention_days(raw: object) -> int:
         min(MAX_SNAPSHOT_RETENTION_DAYS, value),
     )
 
-# Production RuGiu device (docs/device-sl-ce.md)
-DEFAULT_DEVICE_ID = "eba0b0f3d9b38977ed8b0a"
 DEFAULT_REGION = "us"
 # Official HA Tuya uses RTSP; Tuya HLS often expires / breaks HA stream worker
 DEFAULT_STREAM_TYPE = "rtsp"

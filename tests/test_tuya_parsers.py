@@ -94,7 +94,7 @@ class TestInferIsLocked(unittest.TestCase):
 class TestTicketEndpoints(unittest.TestCase):
     def test_endpoint_templates(self):
         const = sys.modules["custom_components.slce_videolock.const"]
-        device_id = "eba0b0f3d9b38977ed8b0a"
+        device_id = "1234567890abcdef"
         self.assertIn(
             device_id,
             const.TICKET_ENDPOINT.format(device_id=device_id),
