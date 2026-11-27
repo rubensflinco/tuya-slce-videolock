@@ -25,7 +25,9 @@
 
 **Keywords / busca:** Home Assistant · Tuya smart lock · videolock · Fechadura SL-CE · Novadigital · câmera na fechadura · doorbell · Remote Unlock · HACS · Marketplace
 
-Versão atual: **0.9.2**. Domain: `slce_videolock`. Licença: **MIT**.
+Versão atual: **0.9.3**. Domain: `slce_videolock`. Licença: **MIT**.
+
+**0.9.3:** corrige dimensões e remove imagens de marca duplicadas para passar na validação Hassfest.
 
 **0.9.2:** usa exclusivamente as credenciais Tuya Cloud OpenAPI para alocar streams, executa leituras de mtime de snapshots no executor e remove o ID pessoal de dispositivo das strings de configuração.
 
