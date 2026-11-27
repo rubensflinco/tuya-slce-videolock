@@ -25,7 +25,9 @@
 
 **Keywords / busca:** Home Assistant · Tuya smart lock · videolock · Fechadura SL-CE · Novadigital · câmera na fechadura · doorbell · Remote Unlock · HACS · Marketplace
 
-Versão atual: **0.9.1**. Domain: `slce_videolock`. Licença: **MIT**.
+Versão atual: **0.9.2**. Domain: `slce_videolock`. Licença: **MIT**.
+
+**0.9.2:** usa exclusivamente as credenciais Tuya Cloud OpenAPI para alocar streams, executa leituras de mtime de snapshots no executor e remove o ID pessoal de dispositivo das strings de configuração.
 
 **0.9.1:** corrige fotos vazias (corredor) no acesso liberado — resolve `bucket`+`path` via API (`movement-configs`), retries mais longos no álbum Cloud, reconsulta records/`initiative_message` antes do fallback de stream.
 
@@ -46,12 +48,12 @@ The **official Tuya** Home Assistant integration does **not** expose a usable `l
 | Unlock / lock | ✅ Cloud ticket (`password-ticket` → `door-operate`) | [tuya-smart-lock](https://github.com/nicolasglg/tuya-smart-lock) (MIT) |
 | Remote unlock PIN (4 digits) | ✅ Setup; PBKDF2 hash; native HA keypad | `LockEntity.code_format` |
 | Battery, online, doorbell, last_* | ✅ Configurable Cloud polling (default **60 s**) | [ha-tuya-lock-monitor](https://github.com/crestall/ha-tuya-lock-monitor) (MIT) |
-| Camera stream | ✅ Sharing + `stream/actions/allocate` (RTSP/HLS) + ffmpeg | Tuya docs; behavior studied in [xtend_tuya](https://github.com/azerty9971/xtend_tuya) (GPL — **not copied**) |
+| Camera stream | ✅ Tuya Cloud OpenAPI `stream/actions/allocate` (RTSP/HLS) + ffmpeg | [Tuya IoT Video Live Stream](https://developer.tuya.com/en/docs/cloud/iot-video-live-stream?id=Kaiuybxmi136f) |
 | Photos + gallery | ✅ Snapshot on **doorbell**, **access granted**, **alarm**; prefers **Cloud album/face cover**; Media folders; retention **30 days** | `image` + `media_source` |
 
 **LAN / `tuya_local`:** out of scope — local unlock on this videolock is not reliable.
 
-Camera prefers the official **Tuya** session stream (like Xtend, no trial). OpenAPI allocate is fallback; IoT Video Live Stream trial is free in the Tuya portal. Details: [`docs/camera-todo.md`](docs/camera-todo.md).
+Camera stream URLs are allocated using this integration's own Tuya Cloud OpenAPI credentials. The Tuya Cloud project must have **IoT Video Live Stream** enabled (a free trial is available in the Tuya portal). Details: [`docs/camera-todo.md`](docs/camera-todo.md).
 
 ## Install
 

@@ -1,12 +1,12 @@
 # Câmera SL-CE — stream Cloud
 
-## Estado (v0.3.0+)
+## Estado (v0.9.2+)
 
 A entidade `camera` chama:
 
-`POST /v1.0/devices/{device_id}/stream/actions/allocate` com `type` preferido (default **hls**) e fallback `rtsp` → `hls` → `flv` → `rtmp`.
+`POST /v1.0/devices/{device_id}/stream/actions/allocate` com `type` preferido (default **rtsp**) e fallback para os demais formatos suportados.
 
-É o **mesmo endpoint OpenAPI** documentado pela Tuya e usado no caminho IoT do [Xtend Tuya](https://github.com/azerty9971/xtend_tuya) (`get_device_stream_allocate`). Código desta integração é **MIT próprio** (sem copiar GPL do Xtend).
+O stream usa somente as credenciais próprias desta integração e o endpoint OpenAPI documentado pela Tuya. Não acessa sessões ou dados de outras integrações.
 
 - `Camera.stream_source()` → URL assinada fresca (expira; re-allocate a cada abertura)
 - Snapshot → `homeassistant.components.ffmpeg.async_get_image`
@@ -14,7 +14,7 @@ A entidade `camera` chama:
 
 Docs Tuya: [IoT Video Live Stream](https://developer.tuya.com/en/docs/cloud/iot-video-live-stream?id=Kaiuybxmi136f)
 
-## Pré-requisito no platform.tuya.com (igual Xtend)
+## Pré-requisito no platform.tuya.com
 
 1. Cloud → Cloud Services  
 2. Ativar trial **IoT Video Live Stream**  
@@ -28,7 +28,7 @@ Também precisa de **IoT Core** + **Smart Lock Open Service** (unlock).
 
 1. Copiar `custom_components/slce_videolock` para `/config/custom_components/` (ou atualizar via HACS).
 2. Reiniciar o Home Assistant.
-3. Settings → Devices & Services → **Tuya SL-CE Videolock** (Access ID/Secret, Device ID `eba0b0f3d9b38977ed8b0a`, região do projeto).
+3. Settings → Devices & Services → **Tuya SL-CE Videolock** (Access ID/Secret, Device ID da sua conta, região do projeto).
 4. No **mesmo** device, conferir lock + sensores + câmera.
 5. Abrir a entidade câmera (More info) e verificar preview/stream.
 6. Se falhar: Settings → System → Logs (`custom_components.slce_videolock`); confirmar serviço Live Stream; testar preferência HLS vs RTSP (options / recriar entry se necessário).
@@ -61,14 +61,6 @@ Correção (igual [Xtend configure_cameras](https://github.com/azerty9971/xtend_
 3. Confirmar status ativo
 4. No HA: reabrir a entidade câmera (ou recarregar a integração)
 
-### Por que o Xtend / Tuya oficial “não pedem assinatura”
-
-Eles **não** usam Access ID/Secret para o stream. Usam a sessão **Smart Life / Sharing** (QR / User Code), a mesma do app — aí a Tuya libera allocate sem o clique em Cloud Services.
-
-O trial **IoT Video Live Stream** é **grátis** (Free Trial); não é plano pago. Só que **não dá** para o addon ativar isso sozinho com Access ID/Secret: a Tuya só autoriza Cloud Services no portal (UI humana). Não existe API pública estável com essas credenciais para “clicar Free Trial” no setup.
-
-**Nesta integração (v0.4.3+):** a câmera tenta primeiro reaproveitar o manager Sharing da integração oficial `tuya` (ou `xtend_tuya`) se o mesmo `device_id` estiver carregado — mesmo caminho do outro addon, sem trial. OpenAPI do projeto fica só como fallback.
-
 ### Spinner eterno / `Invalid data` / 404 no stream worker
 
 Sintoma: more-info da câmera fica no loading (às vezes nem anima), log:
@@ -78,9 +70,9 @@ Error opening stream (Invalid data found when processing input, https://…m3u8�
 Not Found error opening stream (… rtsps://wework-…stream.iot-11.com…)
 ```
 
-Causa: Sharing **conseguiu** URL, mas (1) HLS da Tuya costuma quebrar o demuxer do HA e (2) URLs assinadas **expiram** e o HA reutiliza a sessão antiga.
+Causa: a alocação do stream funcionou, mas (1) HLS da Tuya costuma quebrar o demuxer do HA e (2) URLs assinadas **expiram** e o HA reutiliza a sessão antiga.
 
-Mitigação em **0.4.5**: preferir **RTSP** no Sharing + `async_create_stream` descarta o `Stream` anterior a cada abertura (padrão Xtend #1067).
+Mitigação: preferir **RTSP** e `async_create_stream` descarta o `Stream` anterior a cada abertura.
 
 ### Outros
 
